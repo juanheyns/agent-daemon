@@ -1,0 +1,165 @@
+"""Shared pytest fixtures for ccsock tests."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any, AsyncIterator
+
+import pytest
+import pytest_asyncio
+
+from ccsock import PROTOCOL_VERSION
+from ccsock.config import Config
+from ccsock.daemon import Daemon
+from ccsock.logging import configure
+
+
+FAKE_CLAUDE = Path(__file__).parent / "fake_claude.py"
+
+
+@pytest.fixture
+def fake_claude_bin() -> str:
+    """Return an invoker that runs the fake claude via the current Python."""
+    # The daemon uses asyncio.create_subprocess_exec; we can't trivially pass
+    # multi-token argv, so we wrap by writing a tiny shim script.
+    return str(FAKE_CLAUDE)
+
+
+@pytest.fixture
+def argv_trace_path(tmp_path):
+    path = tmp_path / "argv_trace.jsonl"
+    return path
+
+
+@pytest.fixture
+def fake_mode(monkeypatch):
+    def _set(mode: str) -> None:
+        monkeypatch.setenv("CCSOCK_FAKE_MODE", mode)
+    return _set
+
+
+@pytest_asyncio.fixture
+async def daemon_and_socket(tmp_path, argv_trace_path, monkeypatch):
+    """Start a daemon bound to a tmp socket using the fake claude stub.
+
+    Yields ``(Daemon, socket_path)``. The daemon is shut down on teardown.
+    """
+    monkeypatch.setenv("CCSOCK_FAKE_ARGV_FILE", str(argv_trace_path))
+    monkeypatch.setenv("CCSOCK_FAKE_MODE", os.environ.get("CCSOCK_FAKE_MODE", "normal"))
+
+    socket_path = tmp_path / "ccsockd.sock"
+    cfg = Config(
+        socket_path=str(socket_path),
+        claude_bin=f"{sys.executable}",  # will be overridden below
+        idle_timeout_s=60,
+        max_concurrent_sessions=8,
+    )
+    # We can't spawn "python fake_claude.py" with create_subprocess_exec using
+    # a single binary; use the fake script's shebang by making the "binary"
+    # path the python interpreter and injecting a wrapper. Simpler: swap
+    # claude_bin to point at the fake script directly (shebang runs it).
+    cfg.claude_bin = str(FAKE_CLAUDE)
+
+    logger = configure("error")
+    daemon = Daemon(cfg, logger)
+    await daemon.start()
+    serve_task = asyncio.create_task(daemon.serve_forever())
+    try:
+        yield daemon, str(socket_path)
+    finally:
+        daemon.request_shutdown()
+        try:
+            await asyncio.wait_for(serve_task, timeout=5.0)
+        except asyncio.TimeoutError:
+            serve_task.cancel()
+
+
+class _StreamClient:
+    """Minimal direct-wire client used by the mock tests.
+
+    Keeps a background reader so callers can wait on specific event types.
+    """
+
+    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        self.reader = reader
+        self.writer = writer
+        self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._closed = False
+        self._task = asyncio.create_task(self._pump())
+
+    async def _pump(self) -> None:
+        try:
+            while True:
+                raw = await self.reader.readuntil(b"\n")
+                await self._queue.put(json.loads(raw.rstrip(b"\r\n").decode("utf-8")))
+        except (asyncio.IncompleteReadError, ConnectionError, OSError):
+            await self._queue.put({"type": "__closed__"})
+
+    async def send(self, frame: dict[str, Any]) -> None:
+        data = (json.dumps(frame) + "\n").encode("utf-8")
+        self.writer.write(data)
+        await self.writer.drain()
+
+    async def recv(self, timeout: float = 5.0) -> dict[str, Any]:
+        return await asyncio.wait_for(self._queue.get(), timeout=timeout)
+
+    async def wait_for(
+        self,
+        predicate,
+        *,
+        collect: bool = False,
+        timeout: float = 10.0,
+    ) -> list[dict[str, Any]] | dict[str, Any]:
+        deadline = asyncio.get_running_loop().time() + timeout
+        collected: list[dict[str, Any]] = []
+        while True:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise asyncio.TimeoutError(
+                    f"predicate never matched; saw={collected}"
+                )
+            evt = await self.recv(timeout=remaining)
+            collected.append(evt)
+            if predicate(evt):
+                return collected if collect else evt
+
+    async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self.writer.close()
+        try:
+            await self.writer.wait_closed()
+        except (ConnectionError, OSError):
+            pass
+        self._task.cancel()
+        try:
+            await self._task
+        except BaseException:
+            pass
+
+
+@pytest_asyncio.fixture
+async def client_factory(daemon_and_socket):
+    _daemon, socket_path = daemon_and_socket
+    created: list[_StreamClient] = []
+
+    async def make() -> _StreamClient:
+        reader, writer = await asyncio.open_unix_connection(socket_path)
+        c = _StreamClient(reader, writer)
+        await c.send(
+            {"type": "ccsockd.hello", "client": "test/0", "protocol": PROTOCOL_VERSION}
+        )
+        ack = await c.recv()
+        assert ack["type"] == "ccsockd.hello_ack", ack
+        created.append(c)
+        return c
+
+    yield make
+    for c in created:
+        await c.close()

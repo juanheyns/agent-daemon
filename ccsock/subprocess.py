@@ -1,0 +1,355 @@
+"""Wrapper around a long-running ``claude -p`` child (spec §6).
+
+Responsibilities:
+    * Spawn and respawn (``--resume``) the child with a fixed argv template.
+    * Feed ``ccsockd.user`` turns to stdin.
+    * Parse stdout stream-json events; inject ``"session"`` and enqueue to the
+      connection event queue.
+    * Rate-limit stderr lines, detect OAuth-expiry signatures, surface
+      ``claude_crashed`` on non-zero exit mid-turn.
+    * Interrupt: SIGTERM → 500 ms → SIGKILL, then respawn with ``--resume``.
+
+The wrapper is agnostic to the connection/session layer: it just needs an
+``asyncio.Queue`` to push frames onto. That queue is the per-connection
+bounded event queue described in §9.3.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import signal
+import time
+from collections import deque
+from pathlib import Path
+from typing import Any, Awaitable, Callable
+
+from .errors import (
+    CLAUDE_CRASHED,
+    OAUTH_EXPIRED,
+    SPAWN_FAILED,
+    SessionBusyError,
+    SpawnFailedError,
+)
+
+
+# Signatures that indicate the CLI's OAuth token has expired. Spec §9.2.
+_OAUTH_PATTERNS = (
+    "401",
+    "OAuth token expired",
+    "Please run claude auth",
+    "Session authentication failed",
+)
+
+
+class _StderrRateLimiter:
+    """Rolling-window line limiter. Spec §5.6."""
+
+    def __init__(self, max_lines: int, window_s: float) -> None:
+        self._max = max_lines
+        self._window = window_s
+        self._ts: deque[float] = deque()
+        self.dropped = 0
+
+    def allow(self) -> bool:
+        now = time.monotonic()
+        window_start = now - self._window
+        while self._ts and self._ts[0] < window_start:
+            self._ts.popleft()
+        if len(self._ts) >= self._max:
+            self.dropped += 1
+            return False
+        self._ts.append(now)
+        return True
+
+
+class ClaudeSubprocess:
+    """One child process running ``claude -p --output-format stream-json``."""
+
+    def __init__(
+        self,
+        *,
+        session_id: str,
+        argv: list[str],
+        cwd: str | None,
+        event_queue: asyncio.Queue,
+        logger,
+        stderr_rate_lines: int = 50,
+        stderr_rate_window_s: float = 10.0,
+        on_exit: Callable[["ClaudeSubprocess"], Awaitable[None]] | None = None,
+    ) -> None:
+        self.session_id = session_id
+        self._argv = argv
+        self._cwd = cwd
+        self._queue = event_queue
+        self._log = logger.bind(session_id=session_id)
+        self._stderr_limit = _StderrRateLimiter(stderr_rate_lines, stderr_rate_window_s)
+        self._on_exit = on_exit
+
+        self.proc: asyncio.subprocess.Process | None = None
+        self.pid: int | None = None
+        self.turn_active: bool = False
+        self._closing: bool = False
+        self._stderr_tail: deque[str] = deque(maxlen=20)
+        self._oauth_emitted: bool = False
+        self._reader_tasks: list[asyncio.Task] = []
+        self._stdin_lock = asyncio.Lock()
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    async def spawn(self) -> None:
+        """Launch the child. Raises :class:`SpawnFailedError` on OS error."""
+        self._log.info(
+            "subprocess.spawn",
+            argv_head=self._argv[:4],
+            cwd=self._cwd,
+        )
+        try:
+            self.proc = await asyncio.create_subprocess_exec(
+                *self._argv,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=self._cwd,
+            )
+        except (FileNotFoundError, PermissionError, OSError) as exc:
+            raise SpawnFailedError(f"failed to launch claude: {exc}") from exc
+        self.pid = self.proc.pid
+        self._log = self._log.bind(pid=self.pid)
+        self._reader_tasks = [
+            asyncio.create_task(self._read_stdout(), name=f"cc-stdout-{self.session_id}"),
+            asyncio.create_task(self._read_stderr(), name=f"cc-stderr-{self.session_id}"),
+            asyncio.create_task(self._watch_exit(), name=f"cc-exit-{self.session_id}"),
+        ]
+
+    async def respawn_with_resume(self) -> None:
+        """Replace ``--session-id X`` with ``--resume X`` and relaunch."""
+        self._argv = _argv_to_resume(self._argv, self.session_id)
+        await self.spawn()
+
+    # ------------------------------------------------------------------
+    # Turn I/O
+    # ------------------------------------------------------------------
+
+    async def send_user_line(self, line: bytes) -> None:
+        """Write a single stream-json input line to stdin.
+
+        Raises :class:`SessionBusyError` if a turn is already in flight.
+        """
+        if self.proc is None or self.proc.returncode is not None:
+            raise SpawnFailedError("subprocess not running")
+        if self.turn_active:
+            raise SessionBusyError(self.session_id)
+        async with self._stdin_lock:
+            self.turn_active = True
+            assert self.proc.stdin is not None
+            self.proc.stdin.write(line)
+            try:
+                await self.proc.stdin.drain()
+            except (ConnectionResetError, BrokenPipeError) as exc:
+                self.turn_active = False
+                raise SpawnFailedError(f"stdin write failed: {exc}") from exc
+
+    # ------------------------------------------------------------------
+    # Interrupt + close
+    # ------------------------------------------------------------------
+
+    async def _kill(self, *, grace_ms: int = 500) -> None:
+        if self.proc is None or self.proc.returncode is not None:
+            return
+        try:
+            self.proc.send_signal(signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        try:
+            await asyncio.wait_for(self.proc.wait(), timeout=grace_ms / 1000.0)
+        except asyncio.TimeoutError:
+            try:
+                self.proc.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                await asyncio.wait_for(self.proc.wait(), timeout=1.0)
+            except asyncio.TimeoutError:  # pragma: no cover - defensive
+                self._log.error("subprocess.kill_failed")
+
+    async def interrupt(self) -> bool:
+        """Terminate an in-flight turn and respawn via ``--resume``.
+
+        Returns ``False`` if there was no in-flight turn (caller should emit
+        ``ccsockd.interrupted`` with ``was_idle: true`` and skip the respawn).
+        """
+        if not self.turn_active:
+            return False
+        self._closing = True  # suppress the reader's crash report
+        await self._kill()
+        # Readers will unwind via _watch_exit; await their completion so that
+        # the respawn starts cleanly.
+        await self._drain_readers()
+        self.turn_active = False
+        self._closing = False
+        await self.respawn_with_resume()
+        return True
+
+    async def close(self) -> None:
+        self._closing = True
+        await self._kill()
+        await self._drain_readers()
+
+    async def _drain_readers(self) -> None:
+        for task in self._reader_tasks:
+            if not task.done():
+                try:
+                    await asyncio.wait_for(task, timeout=2.0)
+                except asyncio.TimeoutError:  # pragma: no cover - defensive
+                    task.cancel()
+        self._reader_tasks = []
+
+    # ------------------------------------------------------------------
+    # Readers
+    # ------------------------------------------------------------------
+
+    async def _read_stdout(self) -> None:
+        assert self.proc is not None and self.proc.stdout is not None
+        stdout = self.proc.stdout
+        while True:
+            try:
+                raw = await stdout.readline()
+            except (asyncio.LimitOverrunError, ValueError):
+                # Line longer than buffer; skip to next newline.
+                self._log.warning("subprocess.stdout_overrun")
+                await stdout.read(1)
+                continue
+            if not raw:
+                return
+            line = raw.rstrip(b"\r\n")
+            if not line:
+                continue
+            try:
+                event = json.loads(line.decode("utf-8", errors="replace"))
+            except json.JSONDecodeError:
+                self._log.warning("subprocess.non_json_stdout", length=len(line))
+                continue
+            if not isinstance(event, dict):
+                continue
+            event["session"] = self.session_id
+            if event.get("type") == "result":
+                self.turn_active = False
+            await self._enqueue(event)
+
+    async def _read_stderr(self) -> None:
+        assert self.proc is not None and self.proc.stderr is not None
+        stderr = self.proc.stderr
+        while True:
+            try:
+                raw = await stderr.readline()
+            except (asyncio.LimitOverrunError, ValueError):
+                await stderr.read(1)
+                continue
+            if not raw:
+                return
+            line = raw.rstrip(b"\r\n").decode("utf-8", errors="replace")
+            if not line:
+                continue
+            self._stderr_tail.append(line)
+
+            # OAuth-expired detection (§9.2); emitted at most once per spawn.
+            if not self._oauth_emitted and any(p in line for p in _OAUTH_PATTERNS):
+                self._oauth_emitted = True
+                await self._enqueue(
+                    {
+                        "type": "ccsockd.error",
+                        "session": self.session_id,
+                        "code": OAUTH_EXPIRED,
+                        "message": "Run `claude auth` to re-authenticate.",
+                    }
+                )
+                continue
+
+            if self._stderr_limit.allow():
+                await self._enqueue(
+                    {
+                        "type": "ccsockd.stderr",
+                        "session": self.session_id,
+                        "line": line,
+                    }
+                )
+
+    async def _watch_exit(self) -> None:
+        assert self.proc is not None
+        rc = await self.proc.wait()
+        self._log.info("subprocess.exit", returncode=rc)
+        if self._closing:
+            return
+        # Crash mid-turn (or unexpected exit): surface to the client.
+        if self.turn_active or rc != 0:
+            tail = " | ".join(self._stderr_tail) or f"exit {rc}"
+            await self._enqueue(
+                {
+                    "type": "ccsockd.error",
+                    "session": self.session_id,
+                    "code": CLAUDE_CRASHED,
+                    "message": f"stderr tail: {tail}"[:2048],
+                }
+            )
+        self.turn_active = False
+        if self._on_exit is not None:
+            try:
+                await self._on_exit(self)
+            except Exception:  # pragma: no cover - defensive
+                self._log.exception("subprocess.on_exit_failed")
+
+    # ------------------------------------------------------------------
+
+    async def _enqueue(self, frame: dict[str, Any]) -> None:
+        # NOTE: the connection dispatcher enforces the bounded-queue / 30 s
+        # slow_consumer policy by watching this same queue.
+        await self._queue.put(frame)
+
+    @property
+    def running(self) -> bool:
+        return self.proc is not None and self.proc.returncode is None
+
+
+# ---------------------------------------------------------------------------
+# Argv helpers
+# ---------------------------------------------------------------------------
+
+
+def _argv_to_resume(argv: list[str], session_id: str) -> list[str]:
+    """Rewrite ``--session-id X`` → ``--resume X`` for respawn.
+
+    If ``--resume X`` is already present the argv is returned unchanged.
+    """
+    out: list[str] = []
+    i = 0
+    replaced = False
+    while i < len(argv):
+        token = argv[i]
+        if token == "--session-id" and i + 1 < len(argv):
+            out.append("--resume")
+            out.append(argv[i + 1])
+            i += 2
+            replaced = True
+            continue
+        out.append(token)
+        i += 1
+    if not replaced and "--resume" not in out:
+        # Defensive: ensure resume flag is present.
+        out += ["--resume", session_id]
+    return out
+
+
+def session_file_path(cwd: str | None, session_id: str) -> Path:
+    """Return the expected ``~/.claude/projects/.../<session>.jsonl`` path.
+
+    We don't parse these files. Used only for ``delete: true`` on close
+    (spec §6.5).
+    """
+    home = Path.home()
+    # Claude Code encodes cwd by replacing separators; we mirror the common
+    # "slashes → dashes" heuristic. If the file isn't there we no-op.
+    cwd_key = (cwd or str(home)).replace("/", "-").lstrip("-")
+    return home / ".claude" / "projects" / f"-{cwd_key}" / f"{session_id}.jsonl"
