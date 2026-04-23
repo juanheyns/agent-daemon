@@ -23,12 +23,6 @@ does not implement a tool protocol, does not filter events. It:
    field added.
 4. Manages subprocess lifecycle (spawn, kill, respawn via `--resume`).
 
-**Motivation:** Claude Code's OAuth token can no longer reach
-`api.anthropic.com` directly. Shelling to `claude -p` is the supported path,
-but each turn pays a ~1 s cold start. `ccsockd` keeps subprocesses warm across
-turns and makes the same CC instance usable from scripts, editors, agent
-harnesses, and CI jobs.
-
 ---
 
 ## 2. Goals and Non-Goals
