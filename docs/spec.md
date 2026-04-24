@@ -1,6 +1,7 @@
 ---
 title: Protocol spec
 nav_order: 2
+permalink: /spec/
 ---
 
 <!-- Auto-synced from README.md by .github/workflows/docs-sync.yml. Edit the root README. -->
