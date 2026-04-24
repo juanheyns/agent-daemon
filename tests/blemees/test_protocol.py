@@ -25,7 +25,12 @@ from blemees.protocol import (
     parse_line,
     parse_list_sessions,
     parse_open,
+    parse_ping,
+    parse_session_info,
+    parse_status,
+    parse_unwatch,
     parse_user,
+    parse_watch,
 )
 
 # ---------------------------------------------------------------------------
@@ -407,3 +412,98 @@ def test_error_frame_omits_unset_ids():
     frame = error_frame("internal", "bad")
     assert "id" not in frame
     assert "session_id" not in frame
+
+
+# ---------------------------------------------------------------------------
+# ping / status
+# ---------------------------------------------------------------------------
+
+
+def test_parse_ping_ok_no_data():
+    msg = parse_ping({"type": "blemeesd.ping"})
+    assert msg.id is None
+
+
+def test_parse_ping_ok_with_id_and_data():
+    msg = parse_ping({"type": "blemeesd.ping", "id": "p1", "data": {"x": 1}})
+    assert msg.id == "p1"
+    assert msg.data == {"x": 1}
+
+
+def test_parse_ping_rejects_extra_keys():
+    with pytest.raises(ProtocolError, match="unexpected field"):
+        parse_ping({"type": "blemeesd.ping", "bogus": True})
+
+
+def test_parse_status_ok():
+    msg = parse_status({"type": "blemeesd.status", "id": "s1"})
+    assert msg.id == "s1"
+
+
+def test_parse_status_rejects_extra_keys():
+    with pytest.raises(ProtocolError, match="unexpected field"):
+        parse_status({"type": "blemeesd.status", "extra": 1})
+
+
+# ---------------------------------------------------------------------------
+# Strict key checking (additionalProperties: false parity)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_hello_rejects_extra_keys():
+    with pytest.raises(ProtocolError, match="unexpected field"):
+        parse_hello({"type": "blemeesd.hello", "protocol": "blemees/1", "unknown": True})
+
+
+def test_parse_user_rejects_extra_keys():
+    with pytest.raises(ProtocolError, match="unexpected field"):
+        parse_user(
+            {
+                "type": "claude.user",
+                "session_id": "s1",
+                "message": {"role": "user", "content": "hi"},
+                "extra": "oops",
+            }
+        )
+
+
+def test_parse_interrupt_rejects_extra_keys():
+    with pytest.raises(ProtocolError, match="unexpected field"):
+        parse_interrupt({"type": "blemeesd.interrupt", "session_id": "s1", "extra": 1})
+
+
+def test_parse_close_rejects_extra_keys():
+    with pytest.raises(ProtocolError, match="unexpected field"):
+        parse_close({"type": "blemeesd.close", "session_id": "s1", "extra": 1})
+
+
+def test_parse_list_sessions_rejects_extra_keys():
+    with pytest.raises(ProtocolError, match="unexpected field"):
+        parse_list_sessions({"type": "blemeesd.list_sessions", "cwd": "/tmp", "extra": 1})
+
+
+def test_parse_watch_rejects_extra_keys():
+    with pytest.raises(ProtocolError, match="unexpected field"):
+        parse_watch({"type": "blemeesd.watch", "session_id": "s1", "extra": 1})
+
+
+def test_parse_unwatch_rejects_extra_keys():
+    with pytest.raises(ProtocolError, match="unexpected field"):
+        parse_unwatch({"type": "blemeesd.unwatch", "session_id": "s1", "extra": 1})
+
+
+def test_parse_session_info_rejects_extra_keys():
+    with pytest.raises(ProtocolError, match="unexpected field"):
+        parse_session_info({"type": "blemeesd.session_info", "session_id": "s1", "extra": 1})
+
+
+def test_parse_open_tolerates_extra_keys():
+    # blemeesd.open uses additionalProperties: true — unknown keys must pass through.
+    msg = parse_open(
+        {
+            "type": "blemeesd.open",
+            "session_id": "s1",
+            "unknown_flag": "value",
+        }
+    )
+    assert msg.session_id == "s1"

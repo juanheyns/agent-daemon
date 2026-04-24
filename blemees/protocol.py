@@ -7,8 +7,9 @@ Responsibilities:
     * Reject unsafe flags.
 
 All dataclasses are immutable and carry only the fields required by the
-dispatcher. Unknown fields in inbound messages are tolerated (forward
-compatibility), but unrecognised ``blemeesd.*`` types raise.
+dispatcher. Inbound frames whose schemas set ``additionalProperties: false``
+are rejected when unknown keys are present; ``blemeesd.open`` (which uses
+``additionalProperties: true``) is the only exception.
 """
 
 from __future__ import annotations
@@ -92,6 +93,23 @@ def parse_line(line: bytes, *, max_bytes: int = DEFAULT_MAX_LINE_BYTES) -> dict[
 
 
 # ---------------------------------------------------------------------------
+# Strict-key helper (mirrors ``additionalProperties: false`` in schemas).
+# ---------------------------------------------------------------------------
+
+
+def _reject_extra_keys(obj: dict[str, Any], allowed: frozenset[str]) -> None:
+    """Raise :class:`ProtocolError` when *obj* contains keys not in *allowed*.
+
+    Applied to every parse function whose inbound schema sets
+    ``additionalProperties: false``.
+    """
+    extra = obj.keys() - allowed
+    if extra:
+        field = next(iter(sorted(extra)))
+        raise ProtocolError(f"unexpected field: {field!r}")
+
+
+# ---------------------------------------------------------------------------
 # Typed control-message dataclasses.
 # ---------------------------------------------------------------------------
 
@@ -154,7 +172,22 @@ class SessionInfoMessage:
     session_id: str
 
 
+_MISSING: Any = object()  # sentinel for optional fields not present in the wire frame
+
+
+@dataclasses.dataclass(slots=True)
+class PingMessage:
+    id: str | None
+    data: Any  # opaque; echoed back on pong; _MISSING means key was absent
+
+
+@dataclasses.dataclass(slots=True)
+class StatusMessage:
+    id: str | None
+
+
 def parse_hello(obj: dict[str, Any]) -> HelloMessage:
+    _reject_extra_keys(obj, frozenset({"type", "protocol", "client"}))
     protocol = obj.get("protocol")
     if not isinstance(protocol, str):
         raise ProtocolError("hello missing 'protocol'")
@@ -280,6 +313,7 @@ def parse_open(obj: dict[str, Any]) -> OpenMessage:
 
 
 def parse_user(obj: dict[str, Any]) -> UserMessage:
+    _reject_extra_keys(obj, frozenset({"type", "session_id", "message"}))
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         raise ProtocolError("user requires 'session_id'")
@@ -296,6 +330,7 @@ def parse_user(obj: dict[str, Any]) -> UserMessage:
 
 
 def parse_interrupt(obj: dict[str, Any]) -> InterruptMessage:
+    _reject_extra_keys(obj, frozenset({"type", "session_id"}))
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         raise ProtocolError("interrupt requires 'session_id'")
@@ -303,6 +338,7 @@ def parse_interrupt(obj: dict[str, Any]) -> InterruptMessage:
 
 
 def parse_close(obj: dict[str, Any]) -> CloseMessage:
+    _reject_extra_keys(obj, frozenset({"type", "id", "session_id", "delete"}))
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         raise ProtocolError("close requires 'session_id'")
@@ -314,6 +350,7 @@ def parse_close(obj: dict[str, Any]) -> CloseMessage:
 
 
 def parse_list_sessions(obj: dict[str, Any]) -> ListSessionsMessage:
+    _reject_extra_keys(obj, frozenset({"type", "id", "cwd"}))
     cwd = obj.get("cwd")
     if not isinstance(cwd, str) or not cwd:
         raise ProtocolError("list_sessions requires non-empty 'cwd'")
@@ -323,7 +360,24 @@ def parse_list_sessions(obj: dict[str, Any]) -> ListSessionsMessage:
     return ListSessionsMessage(id=req_id, cwd=cwd)
 
 
+def parse_ping(obj: dict[str, Any]) -> PingMessage:
+    _reject_extra_keys(obj, frozenset({"type", "id", "data"}))
+    req_id = obj.get("id")
+    if req_id is not None and not isinstance(req_id, str):
+        raise ProtocolError("'id' must be a string")
+    return PingMessage(id=req_id, data=obj.get("data", _MISSING))
+
+
+def parse_status(obj: dict[str, Any]) -> StatusMessage:
+    _reject_extra_keys(obj, frozenset({"type", "id"}))
+    req_id = obj.get("id")
+    if req_id is not None and not isinstance(req_id, str):
+        raise ProtocolError("'id' must be a string")
+    return StatusMessage(id=req_id)
+
+
 def parse_watch(obj: dict[str, Any]) -> WatchMessage:
+    _reject_extra_keys(obj, frozenset({"type", "id", "session_id", "last_seen_seq"}))
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         raise ProtocolError("watch requires 'session_id'")
@@ -337,6 +391,7 @@ def parse_watch(obj: dict[str, Any]) -> WatchMessage:
 
 
 def parse_unwatch(obj: dict[str, Any]) -> UnwatchMessage:
+    _reject_extra_keys(obj, frozenset({"type", "id", "session_id"}))
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         raise ProtocolError("unwatch requires 'session_id'")
@@ -347,6 +402,7 @@ def parse_unwatch(obj: dict[str, Any]) -> UnwatchMessage:
 
 
 def parse_session_info(obj: dict[str, Any]) -> SessionInfoMessage:
+    _reject_extra_keys(obj, frozenset({"type", "id", "session_id"}))
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         raise ProtocolError("session_info requires 'session_id'")

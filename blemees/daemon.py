@@ -45,7 +45,10 @@ from .errors import (
 )
 from .logging import StructuredLogger
 from .protocol import (
+    _MISSING,
     OpenMessage,
+    PingMessage,
+    StatusMessage,
     build_claude_argv,
     build_user_stdin_line,
     encode,
@@ -57,7 +60,9 @@ from .protocol import (
     parse_line,
     parse_list_sessions,
     parse_open,
+    parse_ping,
     parse_session_info,
+    parse_status,
     parse_unwatch,
     parse_user,
     parse_watch,
@@ -270,9 +275,9 @@ class Connection:
             elif msg_type == "blemeesd.list_sessions":
                 await self._handle_list_sessions(parse_list_sessions(obj))
             elif msg_type == "blemeesd.ping":
-                await self._handle_ping(obj)
+                await self._handle_ping(parse_ping(obj))
             elif msg_type == "blemeesd.status":
-                await self._handle_status(obj)
+                await self._handle_status(parse_status(obj))
             elif msg_type == "blemeesd.watch":
                 await self._handle_watch(parse_watch(obj))
             elif msg_type == "blemeesd.unwatch":
@@ -462,18 +467,18 @@ class Connection:
             {"type": "blemeesd.closed", "id": msg.id, "session_id": msg.session_id}
         )
 
-    async def _handle_ping(self, obj: dict[str, Any]) -> None:
+    async def _handle_ping(self, msg: PingMessage) -> None:
         """Liveness check: reply with ``blemeesd.pong`` carrying the client's id.
 
         A ``data`` field on the ping is echoed back so clients can round-trip a
         correlation token without relying solely on ``id``.
         """
-        frame: dict[str, Any] = {"type": "blemeesd.pong", "id": obj.get("id")}
-        if "data" in obj:
-            frame["data"] = obj["data"]
+        frame: dict[str, Any] = {"type": "blemeesd.pong", "id": msg.id}
+        if msg.data is not _MISSING:
+            frame["data"] = msg.data
         await self._emit_frame(frame)
 
-    async def _handle_status(self, obj: dict[str, Any]) -> None:
+    async def _handle_status(self, msg: StatusMessage) -> None:
         """Daemon-wide introspection snapshot. No side effects.
 
         The snapshot payload is assembled by the :class:`Daemon` via the
@@ -482,7 +487,7 @@ class Connection:
         total connection count, daemon uptime).
         """
         snap: dict[str, Any] = self._status_snapshot() if self._status_snapshot is not None else {}
-        frame = {"type": "blemeesd.status_reply", "id": obj.get("id"), **snap}
+        frame = {"type": "blemeesd.status_reply", "id": msg.id, **snap}
         await self._emit_frame(frame)
 
     async def _handle_watch(self, msg) -> None:
