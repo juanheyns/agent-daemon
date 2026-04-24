@@ -80,7 +80,7 @@ async def test_real_claude_turn_produces_result(real_daemon):
             }
         )
         await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
-        await c.send({"type": "claude.user", "session": session, "text": "Say OK."})
+        await c.send({"type": "claude.user", "session": session, "message": {"role": "user", "content": "Say OK."}})
         res = await c.wait_for(
             lambda e: e.get("type") == "claude.result" and e.get("session") == session,
             timeout=60.0,
@@ -106,14 +106,14 @@ async def test_real_claude_resume_preserves_context(real_daemon):
         )
         await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
         await c.send(
-            {"type": "claude.user", "session": session, "text": "Remember the number 17."}
+            {"type": "claude.user", "session": session, "message": {"role": "user", "content": "Remember the number 17."}}
         )
         await c.wait_for(
             lambda e: e.get("type") == "claude.result" and e.get("session") == session,
             timeout=60.0,
         )
         await c.send(
-            {"type": "claude.user", "session": session, "text": "What number did I ask you to remember? Answer with just the number."}
+            {"type": "claude.user", "session": session, "message": {"role": "user", "content": "What number did I ask you to remember? Answer with just the number."}}
         )
         collected = await c.wait_for(
             lambda e: e.get("type") == "claude.result" and e.get("session") == session,
@@ -151,7 +151,10 @@ async def test_real_claude_interrupt_then_continue(real_daemon):
             {
                 "type": "claude.user",
                 "session": session,
-                "text": "Count slowly from 1 to 200, one number per line.",
+                "message": {
+                    "role": "user",
+                    "content": "Count slowly from 1 to 200, one number per line.",
+                },
             }
         )
         await c.wait_for(
@@ -162,7 +165,7 @@ async def test_real_claude_interrupt_then_continue(real_daemon):
             lambda e: e.get("type") == "blemeesd.interrupted", timeout=10.0
         )
         # Subsequent turn still works.
-        await c.send({"type": "claude.user", "session": session, "text": "Say OK."})
+        await c.send({"type": "claude.user", "session": session, "message": {"role": "user", "content": "Say OK."}})
         await c.wait_for(
             lambda e: e.get("type") == "claude.result" and e.get("session") == session,
             timeout=60.0,

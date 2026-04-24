@@ -130,7 +130,7 @@ async def test_outbound_events_carry_monotonic_seq(custom_daemon):
         )
         opened = await s.wait_for(lambda e: e["type"] == "blemeesd.opened")
         assert opened["last_seq"] == 0
-        await s.send({"type": "claude.user", "session": "s1", "text": "hi"})
+        await s.send({"type": "claude.user", "session": "s1", "message": {"role": "user", "content": "hi"}})
         seqs: list[int] = []
         while True:
             evt = await s.recv(timeout=5.0)
@@ -162,7 +162,7 @@ async def test_reconnect_replays_from_last_seen_seq(custom_daemon):
     s1 = await _connect(cfg.socket_path)
     await s1.send({"type": "blemeesd.open", "id": "r1", "session": "rep", "tools": ""})
     await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
-    await s1.send({"type": "claude.user", "session": "rep", "text": "hi"})
+    await s1.send({"type": "claude.user", "session": "rep", "message": {"role": "user", "content": "hi"}})
     first_seen: list[dict] = []
     while True:
         evt = await s1.recv(timeout=5.0)
@@ -217,7 +217,7 @@ async def test_reconnect_emits_replay_gap_when_buffer_rolled_over(custom_daemon)
     s1 = await _connect(cfg.socket_path)
     await s1.send({"type": "blemeesd.open", "id": "r1", "session": "gap", "tools": ""})
     await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
-    await s1.send({"type": "claude.user", "session": "gap", "text": "hi"})
+    await s1.send({"type": "claude.user", "session": "gap", "message": {"role": "user", "content": "hi"}})
     await s1.wait_for(lambda e: e.get("type") == "claude.result")
     await s1.close()
 
@@ -258,7 +258,7 @@ async def test_mid_turn_disconnect_preserves_events_for_replay(custom_daemon):
     s1 = await _connect(cfg.socket_path)
     await s1.send({"type": "blemeesd.open", "id": "r1", "session": "mid", "tools": ""})
     await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
-    await s1.send({"type": "claude.user", "session": "mid", "text": "hi"})
+    await s1.send({"type": "claude.user", "session": "mid", "message": {"role": "user", "content": "hi"}})
     await s1.wait_for(lambda e: e.get("type") == "claude.stream_event")
     # Drop without reading further.
     await s1.close()
@@ -313,7 +313,7 @@ async def test_event_log_survives_restart(tmp_path, monkeypatch):
         s = await _connect(cfg.socket_path)
         await s.send({"type": "blemeesd.open", "id": "r1", "session": "dur", "tools": ""})
         await s.wait_for(lambda e: e["type"] == "blemeesd.opened")
-        await s.send({"type": "claude.user", "session": "dur", "text": "hi"})
+        await s.send({"type": "claude.user", "session": "dur", "message": {"role": "user", "content": "hi"}})
         await s.wait_for(lambda e: e.get("type") == "claude.result")
         await s.close()
     finally:

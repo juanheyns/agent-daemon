@@ -114,8 +114,7 @@ class OpenMessage:
 @dataclasses.dataclass(slots=True)
 class UserMessage:
     session: str
-    text: str | None
-    content: list[Any] | None
+    message: dict[str, Any]  # pass-through to ``claude -p`` stream-json stdin
 
 
 @dataclasses.dataclass(slots=True)
@@ -267,15 +266,18 @@ def parse_user(obj: dict[str, Any]) -> UserMessage:
     session = obj.get("session")
     if not isinstance(session, str) or not session:
         raise ProtocolError("user requires 'session'")
-    text = obj.get("text")
-    content = obj.get("content")
-    if text is not None and not isinstance(text, str):
-        raise ProtocolError("'text' must be a string")
-    if content is not None and not isinstance(content, list):
-        raise ProtocolError("'content' must be an array")
-    if text is None and content is None:
-        raise ProtocolError("user requires 'text' or 'content'")
-    return UserMessage(session=session, text=text, content=content)
+    message = obj.get("message")
+    if not isinstance(message, dict):
+        raise ProtocolError(
+            "user requires 'message' object (pass-through to claude stream-json)"
+        )
+    role = message.get("role")
+    if role != "user":
+        raise ProtocolError("message.role must be 'user'")
+    content = message.get("content")
+    if not isinstance(content, (str, list)):
+        raise ProtocolError("message.content must be a string or array")
+    return UserMessage(session=session, message=message)
 
 
 def parse_interrupt(obj: dict[str, Any]) -> InterruptMessage:
@@ -409,15 +411,12 @@ def build_claude_argv(
     return argv
 
 
-def build_user_stdin_line(session: str, *, text: str | None, content: list[Any] | None) -> bytes:
-    """Canonical ``claude`` stream-json input line for a user turn."""
-    if content is not None:
-        message_content: Any = content
-    else:
-        message_content = text if text is not None else ""
-    payload = {
-        "type": "user",
-        "message": {"role": "user", "content": message_content},
-        "session_id": session,
-    }
+def build_user_stdin_line(session: str, *, message: dict[str, Any]) -> bytes:
+    """Envelope-only translation of ``claude.user`` to CC's stream-json stdin.
+
+    The inbound frame already carries a validated ``message`` dict in CC's
+    native shape; the daemon only swaps the outer ``type`` and renames
+    ``session`` to ``session_id`` for the subprocess.
+    """
+    payload = {"type": "user", "message": message, "session_id": session}
     return (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")

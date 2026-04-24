@@ -59,7 +59,7 @@ async def test_open_then_user_then_result(client_factory, fake_mode):
     )
     opened = await client.wait_for(lambda e: e["type"] == "blemeesd.opened")
     assert opened["session"] == "s1"
-    await client.send({"type": "claude.user", "session": "s1", "text": "hello"})
+    await client.send({"type": "claude.user", "session": "s1", "message": {"role": "user", "content": "hello"}})
     result = await client.wait_for(
         lambda e: e.get("type") == "claude.result" and e.get("session") == "s1"
     )
@@ -155,7 +155,7 @@ async def test_interrupt_respawns_with_resume(
         {"type": "blemeesd.open", "id": "r1", "session": "s-int", "tools": ""}
     )
     await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
-    await client.send({"type": "claude.user", "session": "s-int", "text": "go"})
+    await client.send({"type": "claude.user", "session": "s-int", "message": {"role": "user", "content": "go"}})
     # Wait until streaming starts.
     await client.wait_for(lambda e: e.get("type") == "claude.stream_event")
     await client.send({"type": "blemeesd.interrupt", "session": "s-int"})
@@ -190,7 +190,13 @@ async def test_concurrent_sessions_dont_interfere(client_factory, fake_mode):
             opens.add(evt["session"])
 
     for sid in ("a", "b", "c"):
-        await client.send({"type": "claude.user", "session": sid, "text": f"hi-{sid}"})
+        await client.send(
+            {
+                "type": "claude.user",
+                "session": sid,
+                "message": {"role": "user", "content": f"hi-{sid}"},
+            }
+        )
 
     saw: dict[str, bool] = {}
     while len(saw) < 3:
@@ -209,7 +215,7 @@ async def test_crash_mid_turn_then_recover(
         {"type": "blemeesd.open", "id": "r1", "session": "s-crash", "tools": ""}
     )
     await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
-    await client.send({"type": "claude.user", "session": "s-crash", "text": "boom"})
+    await client.send({"type": "claude.user", "session": "s-crash", "message": {"role": "user", "content": "boom"}})
     err = await client.wait_for(
         lambda e: e.get("type") == "blemeesd.error" and e.get("code") == "claude_crashed"
     )
@@ -217,7 +223,7 @@ async def test_crash_mid_turn_then_recover(
 
     # Next user message should transparently respawn (spec §9.1).
     fake_mode("normal")
-    await client.send({"type": "claude.user", "session": "s-crash", "text": "again"})
+    await client.send({"type": "claude.user", "session": "s-crash", "message": {"role": "user", "content": "again"}})
     await client.wait_for(
         lambda e: e.get("type") == "claude.result" and e.get("session") == "s-crash"
     )

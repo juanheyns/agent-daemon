@@ -72,7 +72,7 @@ async def test_normal_turn_produces_result(monkeypatch):
     await proc.spawn()
     try:
         assert proc.running is True
-        line = build_user_stdin_line("s1", text="hi", content=None)
+        line = build_user_stdin_line("s1", message={"role":"user","content":"hi"})
         await proc.send_user_line(line)
         events = await _drain_until_result(queue, "s1")
         kinds = [e["type"] for e in events]
@@ -99,7 +99,7 @@ async def test_session_busy_while_turn_in_flight(monkeypatch):
     )
     await proc.spawn()
     try:
-        await proc.send_user_line(build_user_stdin_line("s1", text="go", content=None))
+        await proc.send_user_line(build_user_stdin_line("s1", message={"role":"user","content":"go"}))
         # Wait for at least one delta so we know the turn is live.
         while True:
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -107,7 +107,7 @@ async def test_session_busy_while_turn_in_flight(monkeypatch):
                 break
         with pytest.raises(SessionBusyError):
             await proc.send_user_line(
-                build_user_stdin_line("s1", text="again", content=None)
+                build_user_stdin_line("s1", message={"role":"user","content":"again"})
             )
     finally:
         await proc.close()
@@ -126,7 +126,7 @@ async def test_interrupt_kills_and_respawns_with_resume(monkeypatch):
     )
     await proc.spawn()
     try:
-        await proc.send_user_line(build_user_stdin_line("s1", text="go", content=None))
+        await proc.send_user_line(build_user_stdin_line("s1", message={"role":"user","content":"go"}))
         # Wait for streaming to start.
         while True:
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -178,7 +178,7 @@ async def test_crash_surfaces_claude_crashed(monkeypatch):
     )
     await proc.spawn()
     try:
-        await proc.send_user_line(build_user_stdin_line("s1", text="boom", content=None))
+        await proc.send_user_line(build_user_stdin_line("s1", message={"role":"user","content":"boom"}))
         saw_error = False
         for _ in range(20):
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)

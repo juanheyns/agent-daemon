@@ -84,11 +84,16 @@ Open a session (all fields besides `session` optional):
 }
 ```
 
-Send a turn:
+Send a turn. The `message` field passes through verbatim to `claude -p`'s
+stream-json stdin (envelope-only translation — only `claude.user` → `user`
+and `session` → `session_id` are rewritten):
 
 ```json
-{"type":"claude.user","session":"s_abc","text":"Hello"}
+{"type":"claude.user","session":"s_abc","message":{"role":"user","content":"Hello"}}
 ```
+
+For multimodal input, set `message.content` to an array of CC content
+blocks (text, image, etc.).
 
 Interrupt a turn (SIGTERM → respawn with `--resume`):
 

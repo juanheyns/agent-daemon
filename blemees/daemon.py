@@ -388,7 +388,7 @@ class Connection:
                 return
             sess.subprocess = proc
 
-        line = build_user_stdin_line(msg.session, text=msg.text, content=msg.content)
+        line = build_user_stdin_line(msg.session, message=msg.message)
         try:
             await sess.subprocess.send_user_line(line)
         except SessionBusyError as exc:

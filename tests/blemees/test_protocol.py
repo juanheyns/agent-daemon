@@ -277,45 +277,79 @@ def test_build_argv_unset_fields_omit_flags():
 # user / interrupt / close
 # ---------------------------------------------------------------------------
 
-def test_parse_user_text():
-    u = parse_user({"type": "claude.user", "session": "s1", "text": "hello"})
-    assert u.text == "hello"
-    assert u.content is None
-
-
-def test_parse_user_content():
+def test_parse_user_message_string_content():
     u = parse_user(
         {
             "type": "claude.user",
             "session": "s1",
-            "content": [{"type": "text", "text": "hi"}],
+            "message": {"role": "user", "content": "hello"},
         }
     )
-    assert u.content == [{"type": "text", "text": "hi"}]
+    assert u.message == {"role": "user", "content": "hello"}
 
 
-def test_parse_user_requires_text_or_content():
+def test_parse_user_message_list_content():
+    blocks = [{"type": "text", "text": "hi"}]
+    u = parse_user(
+        {
+            "type": "claude.user",
+            "session": "s1",
+            "message": {"role": "user", "content": blocks},
+        }
+    )
+    assert u.message["content"] == blocks
+
+
+def test_parse_user_rejects_missing_message():
     with pytest.raises(ProtocolError):
         parse_user({"type": "claude.user", "session": "s1"})
 
 
-def test_build_user_stdin_line_text():
-    line = build_user_stdin_line("s1", text="hi", content=None)
+def test_parse_user_rejects_legacy_text_shorthand():
+    with pytest.raises(ProtocolError):
+        parse_user({"type": "claude.user", "session": "s1", "text": "hello"})
+
+
+def test_parse_user_rejects_non_user_role():
+    with pytest.raises(ProtocolError):
+        parse_user(
+            {
+                "type": "claude.user",
+                "session": "s1",
+                "message": {"role": "assistant", "content": "x"},
+            }
+        )
+
+
+def test_parse_user_rejects_non_string_non_list_content():
+    with pytest.raises(ProtocolError):
+        parse_user(
+            {
+                "type": "claude.user",
+                "session": "s1",
+                "message": {"role": "user", "content": 42},
+            }
+        )
+
+
+def test_build_user_stdin_line_envelope_only():
+    message = {"role": "user", "content": "hi"}
+    line = build_user_stdin_line("s1", message=message)
     obj = json.loads(line)
-    assert obj == {
-        "type": "user",
-        "message": {"role": "user", "content": "hi"},
-        "session_id": "s1",
-    }
+    assert obj == {"type": "user", "message": message, "session_id": "s1"}
+    # And the message dict is the very same (reference-preserving pass-through).
+    assert obj["message"] == message
     assert line.endswith(b"\n")
 
 
-def test_build_user_stdin_line_content_wins_over_text():
-    line = build_user_stdin_line(
-        "s1", text="ignored", content=[{"type": "text", "text": "hi"}]
-    )
+def test_build_user_stdin_line_preserves_multimodal_blocks():
+    blocks = [
+        {"type": "text", "text": "What's this?"},
+        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "..."}},
+    ]
+    line = build_user_stdin_line("s1", message={"role": "user", "content": blocks})
     obj = json.loads(line)
-    assert obj["message"]["content"] == [{"type": "text", "text": "hi"}]
+    assert obj["message"]["content"] == blocks
 
 
 def test_parse_interrupt_requires_session():

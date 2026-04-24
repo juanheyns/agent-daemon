@@ -253,17 +253,25 @@ On failure:
 
 ### 5.5 User message
 
-Client sends a new user turn to an open session:
+Client sends a new user turn to an open session. The `message` field is
+passed through verbatim to `claude -p`'s stream-json stdin — the daemon
+only rewrites the envelope (`claude.user` → `user`, `session` →
+`session_id`).
+
+Simple text:
 ```json
-{"type":"claude.user","session":"s_abc","text":"Hello"}
+{"type":"claude.user","session":"s_abc","message":{"role":"user","content":"Hello"}}
 ```
 
-For multimodal / richer content, clients pass an explicit `content` array
-using Claude Code's stream-json input schema directly:
+Multimodal: `content` may be an array of CC stream-json blocks:
 ```json
-{"type":"claude.user","session":"s_abc","content":[{"type":"text","text":"What is in this image?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"..."}}]}
+{"type":"claude.user","session":"s_abc","message":{"role":"user","content":[{"type":"text","text":"What is in this image?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"..."}}]}}
 ```
-If `content` is present, `text` is ignored.
+
+`message.role` must be `"user"`. `message.content` must be a string or an
+array of CC content blocks. Any additional fields CC may add to
+`message` in the future will pass through unchanged; the daemon does not
+validate them.
 
 No `id` required. Responses stream as events until the turn ends.
 

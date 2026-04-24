@@ -43,13 +43,25 @@ class Session:
         self._closed = False
         self.last_seq: int = 0  # highest seq observed; pass into open(resume)
 
-    async def send_user(self, text: str | None = None, *, content: list | None = None) -> None:
-        frame: dict[str, Any] = {"type": "claude.user", "session": self.session_id}
-        if content is not None:
-            frame["content"] = content
-        else:
-            frame["text"] = text or ""
-        await self._client._send(frame)
+    async def send_user(
+        self,
+        text: str | None = None,
+        *,
+        content: list | None = None,
+        message: dict | None = None,
+    ) -> None:
+        """Send a user turn.
+
+        Pass ``message={"role":"user","content":...}`` for the raw wire
+        shape. For convenience, ``text="..."`` or ``content=[...]`` will
+        be wrapped into that shape before sending.
+        """
+        if message is None:
+            payload: object = content if content is not None else (text or "")
+            message = {"role": "user", "content": payload}
+        await self._client._send(
+            {"type": "claude.user", "session": self.session_id, "message": message}
+        )
 
     async def interrupt(self) -> None:
         await self._client._send({"type": "blemeesd.interrupt", "session": self.session_id})
