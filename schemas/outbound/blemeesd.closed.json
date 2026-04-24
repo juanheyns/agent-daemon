@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/outbound/blemeesd.closed.json",
+  "title": "blemeesd.closed",
+  "description": "Reply to blemeesd.close.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.closed" },
+    "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" }
+  },
+  "required": ["type", "session_id"],
+  "additionalProperties": true
+}

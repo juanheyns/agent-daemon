@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/outbound/blemeesd.hello_ack.json",
+  "title": "blemeesd.hello_ack",
+  "description": "Reply to a successful blemeesd.hello handshake.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.hello_ack" },
+    "daemon": { "type": "string", "description": "e.g. `blemeesd/0.1.0`" },
+    "protocol": { "const": "blemees/1" },
+    "pid": { "type": "integer" },
+    "claude_version": {
+      "type": ["string", "null"],
+      "description": "Result of `claude --version` captured at daemon startup."
+    }
+  },
+  "required": ["type", "daemon", "protocol", "pid"],
+  "additionalProperties": true
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/_common.json",
+  "title": "Shared definitions for blemeesd/1 wire frames",
+  "description": "Reusable $defs referenced by the per-frame schemas. Not a frame schema itself.",
+  "type": "object",
+  "$defs": {
+    "SessionId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Client-owned session identifier. Opaque; the daemon does not validate format."
+    },
+    "RequestId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque correlation id set by the client on request frames; echoed on the reply."
+    },
+    "Seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonic per-session sequence number injected by the daemon on session-stream frames."
+    },
+    "PeerPid": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Peer PID captured via SO_PEERCRED; may be absent on platforms that do not expose it."
+    },
+    "MessageContent": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "Claude Code content block (text/image/etc.). Schema is intentionally permissive so new block types pass through.",
+            "properties": { "type": { "type": "string" } },
+            "required": ["type"],
+            "additionalProperties": true
+          }
+        }
+      ]
+    },
+    "ClaudeUserMessage": {
+      "type": "object",
+      "description": "Native Claude Code user-turn message. Forwarded verbatim to `claude -p`'s stream-json stdin.",
+      "properties": {
+        "role": { "const": "user" },
+        "content": { "$ref": "#/$defs/MessageContent" }
+      },
+      "required": ["role", "content"],
+      "additionalProperties": true
+    },
+    "SessionSummary": {
+      "type": "object",
+      "description": "One row in a blemeesd.sessions reply.",
+      "properties": {
+        "session_id": { "$ref": "#/$defs/SessionId" },
+        "attached": { "type": "boolean" },
+        "mtime_ms": { "type": "integer", "minimum": 0 },
+        "size": { "type": "integer", "minimum": 0 },
+        "preview": { "type": "string" }
+      },
+      "required": ["session_id", "attached"],
+      "additionalProperties": true
+    }
+  }
+}

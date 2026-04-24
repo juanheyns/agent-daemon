@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/inbound/blemeesd.session_info.json",
+  "title": "blemeesd.session_info",
+  "description": "Query a session's cumulative usage and per-turn counters. Side-effect-free. The accumulator is maintained from claude.result events and (when the durable event log is enabled) persisted to <log_dir>/<session>.usage.json so it survives daemon restarts.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.session_info" },
+    "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" }
+  },
+  "required": ["type", "session_id"],
+  "additionalProperties": false
+}

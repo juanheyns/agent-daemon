@@ -1,0 +1,11 @@
+[Unit]
+Description=Headless Agent daemon
+After=default.target
+
+[Service]
+ExecStart=%h/.local/bin/blemeesd
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=default.target

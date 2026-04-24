@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/inbound/blemeesd.list_sessions.json",
+  "title": "blemeesd.list_sessions",
+  "description": "Enumerate past and currently-attached sessions for a given project cwd. Parity with Claude Code's interactive /resume.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.list_sessions" },
+    "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
+    "cwd": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute project directory. Scopes the listing to ~/.claude/projects/<cwd-hash>/."
+    }
+  },
+  "required": ["type", "cwd"],
+  "additionalProperties": false
+}

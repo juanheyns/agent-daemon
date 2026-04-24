@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/inbound/claude.user.json",
+  "title": "claude.user (inbound)",
+  "description": "Client user turn. The `message` field is a verbatim Claude Code stream-json user message; the daemon only rewrites the envelope (`claude.user` → `user`, `session` → `session_id`) before writing to `claude -p` stdin.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "claude.user" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "message": { "$ref": "https://blemees/schemas/_common.json#/$defs/ClaudeUserMessage" }
+  },
+  "required": ["type", "session_id", "message"],
+  "additionalProperties": false
+}

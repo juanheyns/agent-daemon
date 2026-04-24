@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/inbound/blemeesd.watch.json",
+  "title": "blemeesd.watch",
+  "description": "Subscribe to a session's event stream without owning it. The session must exist (error code: session_unknown). Watchers receive every frame the driving client gets (claude.* events, blemeesd.stderr/replay_gap/error) but cannot send claude.user / blemeesd.interrupt / blemeesd.close for that session.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.watch" },
+    "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "last_seen_seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional replay anchor — daemon pushes ring-buffer frames with seq > last_seen_seq before going live."
+    }
+  },
+  "required": ["type", "session_id"],
+  "additionalProperties": false
+}

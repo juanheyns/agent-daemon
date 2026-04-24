@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blemees"
+version = "0.1.0"
+description = "Headless Agent daemon exposing `claude -p` over a Unix socket."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "blemees contributors" }]
+keywords = ["claude", "claude-code", "daemon", "unix-socket"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = []
+
+[project.scripts]
+blemeesd = "blemees.__main__:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+    "pytest-asyncio>=0.23",
+    "jsonschema>=4.20",
+    "ruff>=0.6",
+]
+
+[tool.setuptools]
+packages = ["blemees"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "requires_claude: needs a real `claude` binary authenticated in the test environment",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["tests/blemees/fake_claude.py"]
+
+[tool.ruff.lint]
+# Keep the starter set conservative so adoption doesn't snowball into a big
+# rewrite. Pycodestyle + pyflakes + isort + pyupgrade + bugbear covers the
+# real-money defects (unused imports, undefined names, mutable defaults,
+# unordered imports) without fighting the existing style.
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",   # line length handled by formatter
+    "B008",   # default-arg callable is fine in our config/defaults
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]     # assert False is OK in tests
+"blemees/subprocess.py" = ["A005"]  # stdlib shadowing intentional
+
+[tool.ruff.format]
+quote-style = "double"

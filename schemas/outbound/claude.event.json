@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/outbound/claude.event.json",
+  "title": "claude.* (native CC event envelope)",
+  "description": "Every stream-json line from `claude -p` is forwarded with its native `type` prefixed by `claude.` (e.g. `claude.system`, `claude.stream_event`, `claude.assistant`, `claude.user`, `claude.result`, `claude.partial_assistant`), plus daemon-injected `session_id` and `seq`. The inner payload (`message`, `event`, `result`, …) passes through unchanged and is intentionally not constrained here — CC owns that schema.",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "pattern": "^claude\\.[a-z_][a-z0-9_]*$"
+    },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "seq": { "$ref": "https://blemees/schemas/_common.json#/$defs/Seq" }
+  },
+  "required": ["type", "session_id", "seq"],
+  "additionalProperties": true
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/inbound/blemeesd.close.json",
+  "title": "blemeesd.close",
+  "description": "Explicitly close and forget a session. With delete:true the daemon also removes the Claude Code transcript and the optional durable event log.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.close" },
+    "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "delete": {
+      "type": "boolean",
+      "default": false,
+      "description": "Remove on-disk transcript (~/.claude/projects/…) and durable event log, if present."
+    }
+  },
+  "required": ["type", "session_id"],
+  "additionalProperties": false
+}
