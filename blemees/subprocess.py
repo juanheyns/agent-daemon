@@ -427,7 +427,7 @@ def _first_user_preview(path: Path) -> str | None:
 def list_session_files(cwd: str | None) -> list[dict]:
     """Enumerate on-disk CC transcripts for ``cwd``.
 
-    Returns newest-first summaries: ``{session, mtime_ms, size, preview?}``.
+    Returns newest-first summaries: ``{session_id, mtime_ms, size, preview?}``.
     Returns an empty list if the project directory does not exist.
     """
     project_dir = project_dir_for_cwd(cwd)
