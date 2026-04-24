@@ -51,7 +51,7 @@ schemas/
   can grow the envelope (e.g. new debug fields) without breaking
   conforming clients.
 * **`claude.*` events** use a loose envelope
-  (`schemas/outbound/claude.event.json`) — only `type`, `session`, and
+  (`schemas/outbound/claude.event.json`) — only `type`, `session_id`, and
   `seq` are constrained; the inner CC payload (`message`, `event`,
   `result`, …) is not validated here, because Claude Code owns that
   schema and we are pass-through.
