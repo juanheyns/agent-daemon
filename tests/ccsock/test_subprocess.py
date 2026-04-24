@@ -12,7 +12,12 @@ import pytest
 from ccsock.errors import SessionBusyError
 from ccsock.logging import configure
 from ccsock.protocol import OpenMessage, build_claude_argv, build_user_stdin_line
-from ccsock.subprocess import ClaudeSubprocess, _argv_to_resume
+from ccsock.subprocess import (
+    ClaudeSubprocess,
+    _argv_to_resume,
+    list_session_files,
+    project_dir_for_cwd,
+)
 
 
 FAKE_CLAUDE = str(Path(__file__).parent / "fake_claude.py")
@@ -207,3 +212,95 @@ async def test_oauth_detection(monkeypatch):
         assert saw, "oauth_expired was never emitted"
     finally:
         await proc.close()
+
+
+# ---------------------------------------------------------------------------
+# list_session_files
+# ---------------------------------------------------------------------------
+
+
+def _write_transcript(path: Path, *, first_user_text: str | None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        json.dumps({"type": "system", "subtype": "init", "sessionId": path.stem}),
+    ]
+    if first_user_text is not None:
+        lines.append(
+            json.dumps(
+                {
+                    "type": "user",
+                    "message": {"role": "user", "content": first_user_text},
+                    "sessionId": path.stem,
+                }
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_list_session_files_empty_when_no_project_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert list_session_files("/some/where/else") == []
+
+
+def test_list_session_files_reads_metadata_and_preview(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cwd = "/home/u/proj"
+    project_dir = project_dir_for_cwd(cwd)
+    assert project_dir == tmp_path / ".claude" / "projects" / "-home-u-proj"
+
+    _write_transcript(project_dir / "aaa.jsonl", first_user_text="First message")
+    _write_transcript(project_dir / "bbb.jsonl", first_user_text="Second session")
+
+    # Touch files to set deterministic mtimes: bbb newer than aaa.
+    import os
+    os.utime(project_dir / "aaa.jsonl", (1_700_000_000, 1_700_000_000))
+    os.utime(project_dir / "bbb.jsonl", (1_700_000_100, 1_700_000_100))
+
+    rows = list_session_files(cwd)
+    assert [r["session"] for r in rows] == ["bbb", "aaa"]
+    assert rows[0]["mtime_ms"] == 1_700_000_100_000
+    assert rows[0]["size"] > 0
+    assert rows[0]["preview"] == "Second session"
+    assert rows[1]["preview"] == "First message"
+
+
+def test_list_session_files_omits_preview_when_no_user_line(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cwd = "/p"
+    project_dir = project_dir_for_cwd(cwd)
+    _write_transcript(project_dir / "xxx.jsonl", first_user_text=None)
+    rows = list_session_files(cwd)
+    assert len(rows) == 1
+    assert rows[0]["session"] == "xxx"
+    assert "preview" not in rows[0]
+
+
+def test_list_session_files_preview_caps_length(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cwd = "/p"
+    project_dir = project_dir_for_cwd(cwd)
+    _write_transcript(project_dir / "big.jsonl", first_user_text="x" * 500)
+    rows = list_session_files(cwd)
+    assert len(rows[0]["preview"]) == 200
+
+
+def test_list_session_files_supports_content_blocks(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cwd = "/p"
+    project_dir = project_dir_for_cwd(cwd)
+    project_dir.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(
+        {
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64"}},
+                    {"type": "text", "text": "describe this"},
+                ],
+            },
+        }
+    )
+    (project_dir / "img.jsonl").write_text(line + "\n", encoding="utf-8")
+    rows = list_session_files(cwd)
+    assert rows[0]["preview"] == "describe this"

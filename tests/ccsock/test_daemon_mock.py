@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -275,3 +276,99 @@ async def test_invalid_message_keeps_connection_alive(client_factory):
     await client.send({"type": "ccsockd.ping"})
     err2 = await client.wait_for(lambda e: e.get("type") == "ccsockd.error")
     assert err2["code"] == "unknown_message"
+
+
+# ---------------------------------------------------------------------------
+# list_sessions
+# ---------------------------------------------------------------------------
+
+def _seed_transcript(
+    home_dir: Path, cwd: str, session_id: str, preview: str | None, mtime: int
+) -> Path:
+    from ccsock.subprocess import project_dir_for_cwd as _pdfc
+    # Recompute project dir against the fake $HOME so the test matches the
+    # runtime encoding.
+    old_home = os.environ.get("HOME")
+    os.environ["HOME"] = str(home_dir)
+    try:
+        project_dir = _pdfc(cwd)
+    finally:
+        if old_home is None:
+            del os.environ["HOME"]
+        else:
+            os.environ["HOME"] = old_home
+    project_dir.mkdir(parents=True, exist_ok=True)
+    lines = [json.dumps({"type": "system", "subtype": "init"})]
+    if preview is not None:
+        lines.append(
+            json.dumps(
+                {
+                    "type": "user",
+                    "message": {"role": "user", "content": preview},
+                }
+            )
+        )
+    path = project_dir / f"{session_id}.jsonl"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.utime(path, (mtime, mtime))
+    return path
+
+
+async def test_list_sessions_requires_cwd(client_factory):
+    client = await client_factory()
+    await client.send({"type": "ccsockd.list_sessions", "id": "r1"})
+    err = await client.wait_for(lambda e: e.get("type") == "ccsockd.error")
+    assert err["code"] == "invalid_message"
+
+
+async def test_list_sessions_empty_for_unknown_cwd(client_factory, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    client = await client_factory()
+    await client.send(
+        {"type": "ccsockd.list_sessions", "id": "r1", "cwd": "/nope/nope"}
+    )
+    reply = await client.wait_for(lambda e: e.get("type") == "ccsockd.sessions")
+    assert reply["id"] == "r1"
+    assert reply["cwd"] == "/nope/nope"
+    assert reply["sessions"] == []
+
+
+async def test_list_sessions_returns_sorted_on_disk(client_factory, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cwd = "/home/u/proj"
+    _seed_transcript(tmp_path, cwd, "older", "old one", 1_700_000_000)
+    _seed_transcript(tmp_path, cwd, "newer", "new one", 1_700_000_100)
+
+    client = await client_factory()
+    await client.send({"type": "ccsockd.list_sessions", "id": "r1", "cwd": cwd})
+    reply = await client.wait_for(lambda e: e.get("type") == "ccsockd.sessions")
+    ids = [s["session"] for s in reply["sessions"]]
+    assert ids == ["newer", "older"]
+    assert reply["sessions"][0]["preview"] == "new one"
+    assert reply["sessions"][0]["attached"] is False
+    assert reply["sessions"][0]["mtime_ms"] == 1_700_000_100_000
+
+
+async def test_list_sessions_flags_attached(
+    client_factory, fake_mode, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    fake_mode("normal")
+    cwd = str(tmp_path)  # any unique, existing dir
+    client = await client_factory()
+    await client.send(
+        {
+            "type": "ccsockd.open",
+            "id": "r1",
+            "session": "live",
+            "tools": "",
+            "cwd": cwd,
+        }
+    )
+    await client.wait_for(lambda e: e.get("type") == "ccsockd.opened")
+
+    await client.send({"type": "ccsockd.list_sessions", "id": "r2", "cwd": cwd})
+    reply = await client.wait_for(lambda e: e.get("type") == "ccsockd.sessions")
+    records = {s["session"]: s for s in reply["sessions"]}
+    assert "live" in records
+    assert records["live"]["attached"] is True

@@ -88,6 +88,10 @@ class SessionTable:
     def list_ids(self) -> list[str]:
         return list(self._sessions.keys())
 
+    def iter_by_cwd(self, cwd: str | None) -> list[Session]:
+        """Return the in-memory sessions whose recorded ``cwd`` matches."""
+        return [s for s in self._sessions.values() if s.cwd == cwd]
+
     # ------------------------------------------------------------------
     # Teardown
     # ------------------------------------------------------------------

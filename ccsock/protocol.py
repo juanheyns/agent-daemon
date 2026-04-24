@@ -129,6 +129,12 @@ class CloseMessage:
     delete: bool
 
 
+@dataclasses.dataclass(slots=True)
+class ListSessionsMessage:
+    id: str | None
+    cwd: str
+
+
 def parse_hello(obj: dict[str, Any]) -> HelloMessage:
     protocol = obj.get("protocol")
     if not isinstance(protocol, str):
@@ -262,6 +268,16 @@ def parse_close(obj: dict[str, Any]) -> CloseMessage:
     if req_id is not None and not isinstance(req_id, str):
         raise ProtocolError("'id' must be a string")
     return CloseMessage(id=req_id, session=session, delete=delete)
+
+
+def parse_list_sessions(obj: dict[str, Any]) -> ListSessionsMessage:
+    cwd = obj.get("cwd")
+    if not isinstance(cwd, str) or not cwd:
+        raise ProtocolError("list_sessions requires non-empty 'cwd'")
+    req_id = obj.get("id")
+    if req_id is not None and not isinstance(req_id, str):
+        raise ProtocolError("'id' must be a string")
+    return ListSessionsMessage(id=req_id, cwd=cwd)
 
 
 # ---------------------------------------------------------------------------

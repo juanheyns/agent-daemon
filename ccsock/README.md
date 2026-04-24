@@ -102,6 +102,28 @@ Close (optionally delete on-disk session state):
 {"type":"ccsockd.close","id":"req_99","session":"s_abc","delete":false}
 ```
 
+List past sessions for a project directory (parity with interactive
+`/resume`; newest first):
+
+```json
+// request
+{"type":"ccsockd.list_sessions","id":"req_7","cwd":"/home/u/proj"}
+
+// reply
+{
+  "type":"ccsockd.sessions","id":"req_7","cwd":"/home/u/proj",
+  "sessions":[
+    {"session":"abc-123","mtime_ms":1745000000000,"size":48123,
+     "attached":false,"preview":"Fix the bug in foo.py"},
+    {"session":"def-456","attached":true}
+  ]
+}
+```
+
+`attached: true` means the daemon currently has that session running for
+another connection (or your own). Records without `mtime_ms` are live
+sessions whose transcript hasn't been written yet — still resumable.
+
 Full details, flag mapping, and error codes: see `ccsockd-spec.md`.
 
 ---

@@ -56,21 +56,23 @@ from .protocol import (
     parse_hello,
     parse_interrupt,
     parse_line,
+    parse_list_sessions,
     parse_open,
     parse_user,
 )
 from .session import Session, SessionTable, make_reaper
-from .subprocess import ClaudeSubprocess
+from .subprocess import ClaudeSubprocess, list_session_files
 
 
 # Reserved `ccsockd.*` types that v0.1 explicitly refuses with
-# ``unknown_message`` (Appendix B).
+# ``unknown_message`` (Appendix B). ``list_sessions`` was reserved in the
+# original spec but unreserved here in v0.1.1 — clients need parity with
+# the interactive ``/resume`` discovery flow.
 _RESERVED_TYPES = frozenset(
     {
         "ccsockd.ping",
         "ccsockd.pong",
         "ccsockd.status",
-        "ccsockd.list_sessions",
         "ccsockd.watch",
     }
 )
@@ -263,6 +265,8 @@ class Connection:
                 await self._handle_interrupt(parse_interrupt(obj))
             elif msg_type == "ccsockd.close":
                 await self._handle_close(parse_close(obj))
+            elif msg_type == "ccsockd.list_sessions":
+                await self._handle_list_sessions(parse_list_sessions(obj))
             elif msg_type == "ccsockd.hello":
                 await self._emit_error(
                     INVALID_MESSAGE, "duplicate hello", id=obj.get("id")
@@ -411,6 +415,32 @@ class Connection:
                 "type": "ccsockd.interrupted",
                 "session": msg.session,
                 "was_idle": not did_kill,
+            }
+        )
+
+    async def _handle_list_sessions(self, msg) -> None:
+        on_disk = list_session_files(msg.cwd)
+        merged: dict[str, dict] = {
+            row["session"]: {**row, "attached": False} for row in on_disk
+        }
+        # Overlay in-memory sessions for the same cwd. Transcripts can lag
+        # the first turn, so a session with no file yet still shows up.
+        for sess in self._sessions.iter_by_cwd(msg.cwd):
+            rec = merged.get(sess.session_id) or {"session": sess.session_id}
+            rec["attached"] = sess.connection_id is not None
+            merged[sess.session_id] = rec
+        sessions = sorted(
+            merged.values(), key=lambda r: r.get("mtime_ms") or 0, reverse=True
+        )
+        self._log.info(
+            "session.list", cwd=msg.cwd, count=len(sessions)
+        )
+        await self._emit_frame(
+            {
+                "type": "ccsockd.sessions",
+                "id": msg.id,
+                "cwd": msg.cwd,
+                "sessions": sessions,
             }
         )
 

@@ -342,14 +342,91 @@ def _argv_to_resume(argv: list[str], session_id: str) -> list[str]:
     return out
 
 
-def session_file_path(cwd: str | None, session_id: str) -> Path:
-    """Return the expected ``~/.claude/projects/.../<session>.jsonl`` path.
+def project_dir_for_cwd(cwd: str | None) -> Path:
+    """Return the ``~/.claude/projects/<encoded-cwd>/`` directory CC uses.
 
-    We don't parse these files. Used only for ``delete: true`` on close
-    (spec §6.5).
+    Mirrors Claude Code's "slashes → dashes, leading dash" encoding. We
+    don't rely on this for correctness within a session; it's only used
+    for on-disk operations (delete-on-close, list-sessions).
     """
     home = Path.home()
-    # Claude Code encodes cwd by replacing separators; we mirror the common
-    # "slashes → dashes" heuristic. If the file isn't there we no-op.
     cwd_key = (cwd or str(home)).replace("/", "-").lstrip("-")
-    return home / ".claude" / "projects" / f"-{cwd_key}" / f"{session_id}.jsonl"
+    return home / ".claude" / "projects" / f"-{cwd_key}"
+
+
+def session_file_path(cwd: str | None, session_id: str) -> Path:
+    """Return the expected ``<project-dir>/<session>.jsonl`` path."""
+    return project_dir_for_cwd(cwd) / f"{session_id}.jsonl"
+
+
+_PREVIEW_CAP = 200
+_PREVIEW_SCAN_LINES = 8
+
+
+def _first_user_preview(path: Path) -> str | None:
+    """Best-effort extraction of the first user message from a CC transcript.
+
+    Scans the first few lines, returning the text of the first ``type:"user"``
+    record (content may be a string or a list of blocks). Returns ``None`` if
+    we can't find one — treat as "no preview available".
+    """
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as fh:
+            for _ in range(_PREVIEW_SCAN_LINES):
+                line = fh.readline()
+                if not line:
+                    break
+                try:
+                    evt = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(evt, dict) or evt.get("type") != "user":
+                    continue
+                msg = evt.get("message") or {}
+                content = msg.get("content")
+                text: str | None = None
+                if isinstance(content, str):
+                    text = content
+                elif isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            text = block.get("text", "")
+                            break
+                if text is None:
+                    continue
+                return text[:_PREVIEW_CAP]
+    except OSError:
+        return None
+    return None
+
+
+def list_session_files(cwd: str | None) -> list[dict]:
+    """Enumerate on-disk CC transcripts for ``cwd``.
+
+    Returns newest-first summaries: ``{session, mtime_ms, size, preview?}``.
+    Returns an empty list if the project directory does not exist.
+    """
+    project_dir = project_dir_for_cwd(cwd)
+    out: list[dict] = []
+    try:
+        entries = list(project_dir.iterdir())
+    except (FileNotFoundError, NotADirectoryError, PermissionError):
+        return out
+    for entry in entries:
+        if entry.suffix != ".jsonl" or not entry.is_file():
+            continue
+        try:
+            st = entry.stat()
+        except OSError:
+            continue
+        record: dict = {
+            "session": entry.stem,
+            "mtime_ms": int(st.st_mtime * 1000),
+            "size": st.st_size,
+        }
+        preview = _first_user_preview(entry)
+        if preview is not None:
+            record["preview"] = preview
+        out.append(record)
+    out.sort(key=lambda r: r["mtime_ms"], reverse=True)
+    return out

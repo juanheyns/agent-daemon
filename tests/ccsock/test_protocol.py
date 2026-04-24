@@ -23,6 +23,7 @@ from ccsock.protocol import (
     parse_hello,
     parse_interrupt,
     parse_line,
+    parse_list_sessions,
     parse_open,
     parse_user,
 )
@@ -308,6 +309,28 @@ def test_parse_close_defaults_delete_false():
 def test_parse_close_delete_true():
     c = parse_close({"type": "ccsockd.close", "session": "s1", "delete": True})
     assert c.delete is True
+
+
+# ---------------------------------------------------------------------------
+# list_sessions
+# ---------------------------------------------------------------------------
+
+def test_parse_list_sessions_requires_cwd():
+    with pytest.raises(ProtocolError):
+        parse_list_sessions({"type": "ccsockd.list_sessions"})
+
+
+def test_parse_list_sessions_rejects_non_string_cwd():
+    with pytest.raises(ProtocolError):
+        parse_list_sessions({"type": "ccsockd.list_sessions", "cwd": 42})
+
+
+def test_parse_list_sessions_ok():
+    msg = parse_list_sessions(
+        {"type": "ccsockd.list_sessions", "id": "r1", "cwd": "/home/u/proj"}
+    )
+    assert msg.cwd == "/home/u/proj"
+    assert msg.id == "r1"
 
 
 # ---------------------------------------------------------------------------

@@ -107,6 +107,25 @@ class CcsockClient:
     async def __aexit__(self, *_exc: Any) -> None:
         await self.close()
 
+    async def list_sessions(self, cwd: str) -> list[dict[str, Any]]:
+        """Return past sessions for ``cwd`` (on-disk + currently attached).
+
+        Results are sorted newest-first and each record has at least
+        ``session`` and ``attached``; on-disk records also carry ``mtime_ms``,
+        ``size``, and an optional ``preview`` of the first user message.
+        """
+        self._next_req += 1
+        req_id = f"req_{self._next_req}"
+        fut: asyncio.Future = asyncio.get_running_loop().create_future()
+        self._pending[req_id] = fut
+        await self._send(
+            {"type": "ccsockd.list_sessions", "id": req_id, "cwd": cwd}
+        )
+        reply = await fut
+        if reply.get("type") == "ccsockd.error":
+            raise CcsockClientError(reply.get("code", ""), reply.get("message", ""))
+        return list(reply.get("sessions", []))
+
     @contextlib.asynccontextmanager
     async def open_session(self, *, session: str, **fields: Any) -> AsyncIterator[Session]:
         self._next_req += 1
@@ -158,7 +177,13 @@ class CcsockClient:
                 msg_type = evt.get("type")
                 if (
                     req_id
-                    and msg_type in {"ccsockd.opened", "ccsockd.closed", "ccsockd.error"}
+                    and msg_type
+                    in {
+                        "ccsockd.opened",
+                        "ccsockd.closed",
+                        "ccsockd.sessions",
+                        "ccsockd.error",
+                    }
                     and req_id in self._pending
                 ):
                     fut = self._pending.pop(req_id)
