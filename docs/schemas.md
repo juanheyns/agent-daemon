@@ -71,7 +71,8 @@ Validate a frame with any JSON Schema 2020-12 library. In Python:
 ```python
 import json
 from pathlib import Path
-from jsonschema import Draft202012Validator, RefResolver
+from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
 
 schemas_dir = Path("schemas").resolve()
 store = {
@@ -80,11 +81,13 @@ store = {
     for p in schemas_dir.rglob("*.json")
 }
 
+registry = Registry()
+for uri, schema in store.items():
+    registry = registry.with_resource(uri, Resource.from_contents(schema))
+
 def validate(frame_type: str, frame: dict, direction: str = "inbound") -> None:
     url = f"https://blemees/schemas/{direction}/{frame_type}.json"
-    schema = store[url]
-    resolver = RefResolver(base_uri=url, referrer=schema, store=store)
-    Draft202012Validator(schema, resolver=resolver).validate(frame)
+    Draft202012Validator(store[url], registry=registry).validate(frame)
 ```
 
 Generators (`datamodel-code-generator`, `quicktype`, etc.) can turn
