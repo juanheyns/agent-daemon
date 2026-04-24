@@ -7,7 +7,6 @@ class Blemees < Formula
 
   url "https://github.com/blemees/blemees-daemon/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "a5fadce5ee03549dfbd2a628027e58741b02907f60238a5a9d973f595a8e3ecf"
-  version "0.1.0"
   head "https://github.com/blemees/blemees-daemon.git", branch: "main"
 
   # Runtime: stdlib-only; we just need a working Python.
