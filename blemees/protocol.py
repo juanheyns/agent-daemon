@@ -282,7 +282,7 @@ def parse_open(obj: dict[str, Any]) -> OpenMessage:
 def parse_user(obj: dict[str, Any]) -> UserMessage:
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
-        raise ProtocolError("user requires 'session'")
+        raise ProtocolError("user requires 'session_id'")
     message = obj.get("message")
     if not isinstance(message, dict):
         raise ProtocolError("user requires 'message' object (pass-through to claude stream-json)")
