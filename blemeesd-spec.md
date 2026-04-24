@@ -113,6 +113,11 @@ script `blemeesd` in `pyproject.toml` maps to `python -m blemees`.
 
 ## 5. Wire Protocol
 
+Machine-readable JSON Schemas for every frame in this section live
+under `schemas/` (Draft 2020-12). See `schemas/README.md` for layout
+and usage. This prose is the human-facing spec; the schemas are the
+contract.
+
 ### 5.1 Framing
 
 - Transport: `AF_UNIX` stream socket.

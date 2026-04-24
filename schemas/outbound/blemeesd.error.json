@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/outbound/blemeesd.error.json",
+  "title": "blemeesd.error",
+  "description": "Daemon error frame. `code` is machine-readable; `message` is for humans. Session-stream errors (claude_crashed, oauth_expired) carry `seq`; handshake/dispatcher errors do not.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.error" },
+    "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
+    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "code": {
+      "type": "string",
+      "enum": [
+        "protocol_mismatch",
+        "invalid_message",
+        "unknown_message",
+        "unsafe_flag",
+        "session_unknown",
+        "session_exists",
+        "session_busy",
+        "spawn_failed",
+        "claude_crashed",
+        "oauth_expired",
+        "oversize_message",
+        "slow_consumer",
+        "daemon_shutdown",
+        "internal"
+      ]
+    },
+    "message": { "type": "string" },
+    "seq": { "$ref": "https://blemees/schemas/_common.json#/$defs/Seq" }
+  },
+  "required": ["type", "code", "message"],
+  "additionalProperties": true
+}

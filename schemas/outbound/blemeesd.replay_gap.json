@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/outbound/blemeesd.replay_gap.json",
+  "title": "blemeesd.replay_gap",
+  "description": "One-shot informational frame emitted before a replay when the ring buffer has rolled over past the client's `last_seen_seq`. Tells the client it missed seqs in (since_seq, first_available_seq).",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.replay_gap" },
+    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "since_seq": { "type": "integer", "minimum": 0 },
+    "first_available_seq": { "type": "integer", "minimum": 1 }
+  },
+  "required": ["type", "session", "since_seq", "first_available_seq"],
+  "additionalProperties": true
+}

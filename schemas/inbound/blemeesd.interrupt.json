@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/inbound/blemeesd.interrupt.json",
+  "title": "blemeesd.interrupt",
+  "description": "Cancel the in-flight turn on a session. SIGTERM → 500 ms → SIGKILL; the subprocess is then respawned with --resume. No-op if no turn is active (reply will carry was_idle:true).",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.interrupt" },
+    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" }
+  },
+  "required": ["type", "session"],
+  "additionalProperties": false
+}

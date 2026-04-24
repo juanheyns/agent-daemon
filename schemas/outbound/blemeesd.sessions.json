@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/outbound/blemeesd.sessions.json",
+  "title": "blemeesd.sessions",
+  "description": "Reply to blemeesd.list_sessions. `sessions` is newest-first, on-disk + attached merged.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.sessions" },
+    "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
+    "cwd": { "type": "string" },
+    "sessions": {
+      "type": "array",
+      "items": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionSummary" }
+    }
+  },
+  "required": ["type", "cwd", "sessions"],
+  "additionalProperties": true
+}

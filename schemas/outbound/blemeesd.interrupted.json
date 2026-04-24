@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/outbound/blemeesd.interrupted.json",
+  "title": "blemeesd.interrupted",
+  "description": "Reply to blemeesd.interrupt. `was_idle:true` means no turn was in flight and no kill happened.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.interrupted" },
+    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "was_idle": { "type": "boolean" }
+  },
+  "required": ["type", "session"],
+  "additionalProperties": true
+}
