@@ -1,0 +1,91 @@
+name: Bump Homebrew tap
+
+# Fires once a GitHub Release is published (the release.yml workflow
+# publishes the release after the sdist/wheel + PyPI jobs succeed).
+# Recomputes the source tarball sha256 for the new tag and pushes an
+# updated Formula/blemees.rb to blemees/homebrew-tap.
+#
+# Secret required: TAP_GITHUB_TOKEN
+#   A fine-grained PAT (or GitHub App installation token) scoped to
+#   the blemees/homebrew-tap repo with permissions:
+#     Contents: Read and write
+#   Add at: Settings → Secrets and variables → Actions → New repository secret.
+#
+# Manual run: use the "Run workflow" button and pass an existing tag
+# (e.g. v0.1.0) to re-sync the tap without cutting a new release.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag to bump the tap to (e.g. v0.1.0)"
+        required: true
+
+permissions: {}
+
+jobs:
+  bump:
+    name: Update tap formula
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          TAG="${INPUT_TAG:-$RELEASE_TAG}"
+          if [[ -z "$TAG" ]]; then
+            echo "::error::Could not resolve tag from event payload"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: blemees/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: tap
+
+      - name: Compute url + sha256 and rewrite formula
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          URL="https://github.com/${REPO}/archive/refs/tags/${TAG}.tar.gz"
+          SHA256=$(curl -fsSL "$URL" | shasum -a 256 | awk '{print $1}')
+          echo "url=$URL"
+          echo "sha256=$SHA256"
+          python3 - "$URL" "$SHA256" <<'PY'
+          import pathlib, re, sys
+          url, sha = sys.argv[1], sys.argv[2]
+          p = pathlib.Path("tap/Formula/blemees.rb")
+          text = p.read_text()
+          text, n_url = re.subn(r'url "[^"]+"', f'url "{url}"', text, count=1)
+          text, n_sha = re.subn(r'sha256 "[^"]+"', f'sha256 "{sha}"', text, count=1)
+          if n_url != 1 or n_sha != 1:
+              raise SystemExit(
+                  f"Formula shape unexpected: url replacements={n_url}, sha256 replacements={n_sha}"
+              )
+          p.write_text(text)
+          PY
+
+      - name: Commit and push
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd tap
+          if git diff --quiet; then
+            echo "Formula already points at ${TAG}; nothing to do."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/blemees.rb
+          git commit -m "Bump blemees to ${TAG}"
+          git push origin HEAD:main
