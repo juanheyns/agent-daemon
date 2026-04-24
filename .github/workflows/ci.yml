@@ -29,13 +29,24 @@ jobs:
     name: Test — py ${{ matrix.python }} on ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # The package is pure-Python stdlib-only, so the wheel is
+      # `py3-none-any` — one artifact for every OS and arch. We still
+      # run a small OS × Python matrix to exercise:
+      #   * each supported Python minor (asyncio / syntax differences),
+      #   * our OS-specific branches (SO_PEERCRED vs LOCAL_PEERCRED,
+      #     socket path conventions, SIGTERM semantics).
+      # Linux ARM64 would add no meaningful coverage — it's the same
+      # interpreter behaviour as Linux x86_64 for our code paths.
       matrix:
-        # ubuntu-latest = Linux x86_64, ubuntu-24.04-arm = Linux ARM64,
-        # macos-latest = macOS Apple Silicon (ARM64). Pure-Python stdlib
-        # package so the wheel is py3-none-any, but we exercise the three
-        # host archs users actually run on.
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
-        python: ["3.11", "3.12", "3.13"]
+        include:
+          - os: ubuntu-latest
+            python: "3.11"
+          - os: ubuntu-latest
+            python: "3.12"
+          - os: ubuntu-latest
+            python: "3.13"
+          - os: macos-latest
+            python: "3.13"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
