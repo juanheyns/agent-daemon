@@ -87,7 +87,7 @@ Open a session (all fields besides `session` optional):
 Send a turn:
 
 ```json
-{"type":"blemeesd.user","session":"s_abc","text":"Hello"}
+{"type":"claude.user","session":"s_abc","text":"Hello"}
 ```
 
 Interrupt a turn (SIGTERM → respawn with `--resume`):

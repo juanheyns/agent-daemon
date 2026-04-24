@@ -44,7 +44,7 @@ class Session:
         self.last_seq: int = 0  # highest seq observed; pass into open(resume)
 
     async def send_user(self, text: str | None = None, *, content: list | None = None) -> None:
-        frame: dict[str, Any] = {"type": "blemeesd.user", "session": self.session_id}
+        frame: dict[str, Any] = {"type": "claude.user", "session": self.session_id}
         if content is not None:
             frame["content"] = content
         else:

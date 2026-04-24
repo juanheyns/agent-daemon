@@ -2,7 +2,7 @@
 
 Responsibilities:
     * Spawn and respawn (``--resume``) the child with a fixed argv template.
-    * Feed ``blemeesd.user`` turns to stdin.
+    * Feed ``claude.user`` turns to stdin.
     * Parse stdout stream-json events; inject ``"session"`` and enqueue to the
       connection event queue.
     * Rate-limit stderr lines, detect OAuth-expiry signatures, surface

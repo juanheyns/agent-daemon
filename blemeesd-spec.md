@@ -125,14 +125,16 @@ script `blemeesd` in `pyproject.toml` maps to `python -m blemees`.
 
 Every `type` on the wire carries an explicit namespace prefix:
 
-| Direction | Prefix | Purpose |
+| Prefix | Emitted by | Purpose |
 |---|---|---|
-| client ↔ daemon | `blemeesd.<verb>` | Control messages (hello, open, user, interrupt, close, error, …). |
-| daemon → client | `claude.<native-type>` | Forwarded Claude Code events — the daemon prepends `claude.` to the CC-native `type` and injects `session`. Inner payloads (e.g. the `event` field of a stream event) are not rewritten. |
+| `blemeesd.*` | client → daemon, daemon → client | Session lifecycle and daemon operations: `hello`, `hello_ack`, `open`, `opened`, `close`, `closed`, `interrupt`, `interrupted`, `error`, `stderr`, `replay_gap`, `list_sessions`, `sessions`. |
+| `claude.*` | client → daemon, daemon → client | Conversation messages. Inbound (`claude.user`) is the client's user turn, which the daemon translates to `claude -p` stream-json stdin. Outbound is everything the daemon forwards from CC's stdout, namespaced by prepending `claude.` to the native `type` (e.g. `claude.system`, `claude.stream_event`, `claude.assistant`, `claude.user`, `claude.result`, `claude.partial_assistant`). Inner payloads (e.g. the `event` field of a stream event) are not rewritten. |
 
-Rationale: unambiguous separation between daemon-level frames, Claude
-Code events, and any future third-party sources. Clients can switch-case
-on `type` without worrying about collisions.
+Rationale: two stable namespaces — one for session lifecycle, one for
+the conversation stream in either direction. Clients can switch-case on
+`type` without worrying about collisions, and a `claude.user` sent and a
+`claude.user` echoed back live in the same namespace because they are
+the same conceptual thing.
 
 ### 5.3 Handshake
 
@@ -253,13 +255,13 @@ On failure:
 
 Client sends a new user turn to an open session:
 ```json
-{"type":"blemeesd.user","session":"s_abc","text":"Hello"}
+{"type":"claude.user","session":"s_abc","text":"Hello"}
 ```
 
 For multimodal / richer content, clients pass an explicit `content` array
 using Claude Code's stream-json input schema directly:
 ```json
-{"type":"blemeesd.user","session":"s_abc","content":[{"type":"text","text":"What is in this image?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"..."}}]}
+{"type":"claude.user","session":"s_abc","content":[{"type":"text","text":"What is in this image?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"..."}}]}
 ```
 If `content` is present, `text` is ignored.
 
@@ -309,7 +311,7 @@ Daemon:
    {"type":"blemeesd.interrupted","session":"s_abc"}
    ```
 3. Respawns the subprocess immediately with `--resume <session>` (all other
-   flags identical to the original open), so the next `blemeesd.user` works
+   flags identical to the original open), so the next `claude.user` works
    without further ceremony.
 
 Any CC events emitted before the kill are forwarded as normal. Already-sent
@@ -397,7 +399,7 @@ Spawn context:
 
 ### 6.2 stdin — feeding user messages
 
-Each client `blemeesd.user` becomes one line on the subprocess stdin, in
+Each client `claude.user` becomes one line on the subprocess stdin, in
 Claude Code's stream-json input shape. Canonical form for simple text:
 ```json
 {"type":"user","message":{"role":"user","content":"<text>"},"session_id":"<session>"}
@@ -409,7 +411,7 @@ For `content` arrays, the daemon passes them through:
 Flush after each line.
 
 Writes to stdin must be queued: only one turn in flight at a time per
-session. If the client sends another `blemeesd.user` while the subprocess has
+session. If the client sends another `claude.user` while the subprocess has
 not yet emitted a `result` event, the daemon replies with
 `error{code:"session_busy"}` and drops the message.
 
@@ -462,7 +464,7 @@ common model for instant `open`. Cost: one idle subprocess per hot model.
 - **Peer identity:** the daemon captures `SO_PEERCRED` (Linux) /
   `LOCAL_PEERCRED` (macOS) at connect time and logs peer PID/UID.
   Informational only; no enforcement in v0.1.
-- **Secret handling:** `system_prompt`, `blemeesd.user` content, and event
+- **Secret handling:** `system_prompt`, `claude.user` content, and event
   deltas are never logged at INFO+. At DEBUG, bodies are redacted to
   `<redacted N chars>`. OAuth tokens are never logged.
 
@@ -524,7 +526,7 @@ On EOF on stdout or non-zero exit during a turn:
 ```json
 {"type":"blemeesd.error","session":"s_abc","code":"claude_crashed","message":"<stderr tail>"}
 ```
-Session remains open. Next `blemeesd.user` respawns via `--resume`.
+Session remains open. Next `claude.user` respawns via `--resume`.
 
 ### 9.2 OAuth expired
 Detect patterns in stderr: `401`, `OAuth token expired`, `Please run claude auth`, `Session authentication failed`. Emit:
@@ -588,7 +590,7 @@ Overall shutdown budget 5 s, then force-exit 1.
 ### 11.2 Mock-claude tests
 Provide a Python stub `claude` script that reads stream-json on stdin and
 emits scripted stream-json events on stdout. Tests:
-- Full turn → `result` event → `blemeesd.user` works again.
+- Full turn → `result` event → `claude.user` works again.
 - Crash mid-turn → `claude_crashed`, next turn respawns.
 - Interrupt → SIGTERM observed, respawn with `--resume`, continues.
 - Concurrent sessions (3 parallel) do not interfere.

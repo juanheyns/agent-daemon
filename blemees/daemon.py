@@ -259,7 +259,7 @@ class Connection:
         try:
             if msg_type == "blemeesd.open":
                 await self._handle_open(parse_open(obj))
-            elif msg_type == "blemeesd.user":
+            elif msg_type == "claude.user":
                 await self._handle_user(parse_user(obj))
             elif msg_type == "blemeesd.interrupt":
                 await self._handle_interrupt(parse_interrupt(obj))
@@ -366,7 +366,7 @@ class Connection:
     async def _handle_user(self, msg) -> None:
         sess = self._sessions.get(msg.session)
         if sess.subprocess is None or not sess.subprocess.running:
-            # Respawn transparently (spec §9.1): "Next blemeesd.user respawns via --resume"
+            # Respawn transparently (spec §9.1): "Next claude.user respawns via --resume"
             new_argv = build_claude_argv(
                 self._config.claude_bin, sess.open_msg, for_resume=True
             )

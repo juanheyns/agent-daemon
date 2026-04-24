@@ -278,7 +278,7 @@ def test_build_argv_unset_fields_omit_flags():
 # ---------------------------------------------------------------------------
 
 def test_parse_user_text():
-    u = parse_user({"type": "blemeesd.user", "session": "s1", "text": "hello"})
+    u = parse_user({"type": "claude.user", "session": "s1", "text": "hello"})
     assert u.text == "hello"
     assert u.content is None
 
@@ -286,7 +286,7 @@ def test_parse_user_text():
 def test_parse_user_content():
     u = parse_user(
         {
-            "type": "blemeesd.user",
+            "type": "claude.user",
             "session": "s1",
             "content": [{"type": "text", "text": "hi"}],
         }
@@ -296,7 +296,7 @@ def test_parse_user_content():
 
 def test_parse_user_requires_text_or_content():
     with pytest.raises(ProtocolError):
-        parse_user({"type": "blemeesd.user", "session": "s1"})
+        parse_user({"type": "claude.user", "session": "s1"})
 
 
 def test_build_user_stdin_line_text():
