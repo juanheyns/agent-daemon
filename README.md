@@ -1,4 +1,4 @@
-# blemeesd — Headless Agent Daemon
+# blemeesd — Headless agent daemon
 
 **Version:** 0.1
 **Language:** Python 3.11+, stdlib only (no runtime deps). Type-hinted.
@@ -196,7 +196,7 @@ Gotchas:
 
 `blemeesd` is a per-user daemon that exposes the Claude Code CLI (`claude -p`)
 as a long-running, multi-session backend over a Unix domain socket. It is a
-thin, general-purpose wrapper: clients get a Headless Agent they can
+thin, general-purpose wrapper: clients get a headless agent they can
 reach from any language, any process.
 
 The daemon is **pass-through by design.** It does not inject a system prompt,

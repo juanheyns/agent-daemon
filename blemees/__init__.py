@@ -1,4 +1,4 @@
-"""blemees — Headless Agent daemon.
+"""blemees — Headless agent daemon.
 
 See README.md at the repository root for the wire protocol and architecture.
 """

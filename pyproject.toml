@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "blemees"
 version = "0.1.0"
-description = "Headless Agent daemon exposing `claude -p` over a Unix socket."
+description = "Headless agent daemon exposing `claude -p` over a Unix socket."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
