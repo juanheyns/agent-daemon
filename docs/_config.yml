@@ -1,5 +1,5 @@
 title: blemeesd
-description: Headless Claude Code daemon exposing `claude -p` over a Unix socket.
+description: Headless Agent daemon exposing `claude -p` over a Unix socket.
 remote_theme: pages-themes/midnight@v0.2.0
 plugins:
   - jekyll-remote-theme
@@ -17,4 +17,4 @@ exclude:
 
 show_downloads: true
 github:
-  repository_url: https://github.com/juanheyns/agent-daemon
+  repository_url: https://github.com/blemees/blemees-daemon

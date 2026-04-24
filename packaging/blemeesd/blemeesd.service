@@ -1,5 +1,5 @@
 [Unit]
-Description=Headless Claude Code daemon
+Description=Headless Agent daemon
 After=default.target
 
 [Service]

@@ -3,11 +3,11 @@ title: blemeesd
 nav_order: 1
 ---
 
-# blemeesd — Headless Claude Code Daemon
+# blemeesd — Headless Agent Daemon
 
 A per-user daemon that exposes the Claude Code CLI (`claude -p`) as a
 long-running, multi-session backend over a Unix domain socket. Clients
-get a headless Claude Code they can reach from any language or process.
+get a Headless Agent they can reach from any language or process.
 
 The daemon is **pass-through by design.** It injects no system prompt,
 defines no tool protocol, and does not filter events; it just brokers
@@ -21,7 +21,7 @@ multiple live `claude -p` sessions, tags their events with a
 ```bash
 pip install blemees          # from PyPI
 # or
-brew tap juanheyns/blemees && brew install blemees
+brew tap blemees/tap && brew install blemees
 ```
 
 Start the daemon (foreground; use systemd/launchd for service mode):
@@ -61,7 +61,7 @@ asyncio.run(main())
   semantics, and error codes.
 - **[JSON Schemas](schemas.html)** — Draft 2020-12 schemas under
   `schemas/` as the machine-readable contract.
-- **[GitHub repository](https://github.com/juanheyns/agent-daemon)** —
+- **[GitHub repository](https://github.com/blemees/blemees-daemon)** —
   source, issues, releases.
 
 ---

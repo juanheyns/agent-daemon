@@ -1,4 +1,4 @@
-# blemeesd — Headless Claude Code Daemon
+# blemeesd — Headless Agent Daemon
 
 **Version:** 0.1
 **Language:** Python 3.11+, stdlib only (no runtime deps). Type-hinted.
@@ -28,15 +28,15 @@ uv tool install blemees
 pipx install blemees
 
 # Homebrew (macOS / Linux):
-brew tap juanheyns/blemees
+brew tap blemees/tap
 brew install blemees
 ```
 
 From source for development:
 
 ```bash
-git clone https://github.com/juanheyns/agent-daemon
-cd agent-daemon
+git clone https://github.com/blemees/blemees-daemon
+cd blemees-daemon
 uv pip install -e ".[dev]"      # or: pip install -e ".[dev]"
 ```
 
@@ -83,7 +83,7 @@ without you touching launchd by hand.
 
 `blemeesd` is a per-user daemon that exposes the Claude Code CLI (`claude -p`)
 as a long-running, multi-session backend over a Unix domain socket. It is a
-thin, general-purpose wrapper: clients get a headless Claude Code they can
+thin, general-purpose wrapper: clients get a Headless Agent they can
 reach from any language, any process.
 
 The daemon is **pass-through by design.** It does not inject a system prompt,
@@ -784,7 +784,7 @@ v0.1 runs in the foreground only. Use systemd/launchd for background.
 
 ```ini
 [Unit]
-Description=Headless Claude Code daemon
+Description=Headless Agent daemon
 After=default.target
 
 [Service]
