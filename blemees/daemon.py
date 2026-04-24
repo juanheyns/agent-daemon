@@ -284,7 +284,7 @@ class Connection:
         except ProtocolError as exc:
             await self._emit_error(INVALID_MESSAGE, exc.message, id=obj.get("id"))
         except CcsockError as exc:
-            await self._emit_error(exc.code, exc.message, id=obj.get("id"), session=obj.get("session"))
+            await self._emit_error(exc.code, exc.message, id=obj.get("id"), session_id=obj.get("session_id"))
         except Exception as exc:  # pragma: no cover - defensive
             self._log.exception("dispatch.internal_error", type=msg_type)
             await self._emit_error(INTERNAL, f"internal error: {exc}")
@@ -294,9 +294,9 @@ class Connection:
     # ------------------------------------------------------------------
 
     async def _handle_open(self, msg: OpenMessage) -> None:
-        existing = self._sessions.try_get(msg.session)
+        existing = self._sessions.try_get(msg.session_id)
         if existing is not None and not msg.resume:
-            raise SessionExistsError(msg.session)
+            raise SessionExistsError(msg.session_id)
 
         if msg.resume:
             if existing is not None:
@@ -311,7 +311,7 @@ class Connection:
                     prev = self._lookup_connection(prev_id)
                     if prev is not None:
                         await prev.notify_session_taken(
-                            msg.session, by_peer_pid=self._peer_pid
+                            msg.session_id, by_peer_pid=self._peer_pid
                         )
                 existing.open_msg = msg  # refresh flags on reattach
                 sess = existing
@@ -328,7 +328,7 @@ class Connection:
         if sess.subprocess is None or not sess.subprocess.running:
             argv = build_claude_argv(self._config.claude_bin, msg, for_resume=msg.resume)
             proc = ClaudeSubprocess(
-                session_id=msg.session,
+                session_id=msg.session_id,
                 argv=argv,
                 cwd=msg.fields.get("cwd"),
                 on_event=sess.on_event,
@@ -339,14 +339,14 @@ class Connection:
             try:
                 await proc.spawn()
             except SpawnFailedError as exc:
-                await self._sessions.remove(msg.session, delete_file=False)
+                await self._sessions.remove(msg.session_id, delete_file=False)
                 await self._emit_error(
-                    SPAWN_FAILED, exc.message, id=msg.id, session=msg.session
+                    SPAWN_FAILED, exc.message, id=msg.id, session_id=msg.session_id
                 )
                 return
             sess.subprocess = proc
 
-        self._owned_sessions.add(msg.session)
+        self._owned_sessions.add(msg.session_id)
 
         # Send ack before the event stream so clients can match the reply
         # before they start consuming (possibly replayed) frames.
@@ -354,7 +354,7 @@ class Connection:
             {
                 "type": "blemeesd.opened",
                 "id": msg.id,
-                "session": msg.session,
+                "session_id": msg.session_id,
                 "subprocess_pid": sess.subprocess.pid,
                 "last_seq": sess.seq,
             }
@@ -372,14 +372,14 @@ class Connection:
         )
         self._log.info(
             "session.open",
-            session_id=msg.session,
+            session_id=msg.session_id,
             resume=msg.resume,
             replayed=replay.get("replayed", 0),
             model=msg.fields.get("model"),
         )
 
     async def _handle_user(self, msg) -> None:
-        sess = self._sessions.get(msg.session)
+        sess = self._sessions.get(msg.session_id)
         if sess.subprocess is None or not sess.subprocess.running:
             # Respawn transparently (spec §9.1): "Next claude.user respawns via --resume"
             new_argv = build_claude_argv(
@@ -398,36 +398,36 @@ class Connection:
                 await proc.spawn()
             except SpawnFailedError as exc:
                 await self._emit_error(
-                    SPAWN_FAILED, exc.message, session=msg.session
+                    SPAWN_FAILED, exc.message, session_id=msg.session_id
                 )
                 return
             sess.subprocess = proc
 
-        line = build_user_stdin_line(msg.session, message=msg.message)
+        line = build_user_stdin_line(session_id=msg.session_id, message=msg.message)
         try:
             await sess.subprocess.send_user_line(line)
         except SessionBusyError as exc:
-            await self._emit_error(SESSION_BUSY, exc.message, session=msg.session)
+            await self._emit_error(SESSION_BUSY, exc.message, session_id=msg.session_id)
         except SpawnFailedError as exc:
-            await self._emit_error(SPAWN_FAILED, exc.message, session=msg.session)
+            await self._emit_error(SPAWN_FAILED, exc.message, session_id=msg.session_id)
 
     async def _handle_interrupt(self, msg) -> None:
-        sess = self._sessions.try_get(msg.session)
+        sess = self._sessions.try_get(msg.session_id)
         if sess is None or sess.subprocess is None:
             await self._emit_frame(
                 {
                     "type": "blemeesd.interrupted",
-                    "session": msg.session,
+                    "session_id": msg.session_id,
                     "was_idle": True,
                 }
             )
             return
-        self._log.info("session.interrupt", session_id=msg.session)
+        self._log.info("session.interrupt", session_id=msg.session_id)
         did_kill = await sess.subprocess.interrupt()
         await self._emit_frame(
             {
                 "type": "blemeesd.interrupted",
-                "session": msg.session,
+                "session_id": msg.session_id,
                 "was_idle": not did_kill,
             }
         )
@@ -435,12 +435,12 @@ class Connection:
     async def _handle_list_sessions(self, msg) -> None:
         on_disk = list_session_files(msg.cwd)
         merged: dict[str, dict] = {
-            row["session"]: {**row, "attached": False} for row in on_disk
+            row["session_id"]: {**row, "attached": False} for row in on_disk
         }
         # Overlay in-memory sessions for the same cwd. Transcripts can lag
         # the first turn, so a session with no file yet still shows up.
         for sess in self._sessions.iter_by_cwd(msg.cwd):
-            rec = merged.get(sess.session_id) or {"session": sess.session_id}
+            rec = merged.get(sess.session_id) or {"session_id": sess.session_id}
             rec["attached"] = sess.connection_id is not None
             merged[sess.session_id] = rec
         sessions = sorted(
@@ -460,12 +460,12 @@ class Connection:
 
     async def _handle_close(self, msg) -> None:
         self._log.info(
-            "session.close", session_id=msg.session, delete=msg.delete
+            "session.close", session_id=msg.session_id, delete=msg.delete
         )
-        self._owned_sessions.discard(msg.session)
-        await self._sessions.remove(msg.session, delete_file=msg.delete)
+        self._owned_sessions.discard(msg.session_id)
+        await self._sessions.remove(msg.session_id, delete_file=msg.delete)
         await self._emit_frame(
-            {"type": "blemeesd.closed", "id": msg.id, "session": msg.session}
+            {"type": "blemeesd.closed", "id": msg.id, "session_id": msg.session_id}
         )
 
     # ------------------------------------------------------------------
@@ -523,10 +523,10 @@ class Connection:
         message: str,
         *,
         id: str | None = None,
-        session: str | None = None,
+        session_id: str | None = None,
     ) -> None:
-        self._log.warning("error.emitted", code=code, session_id=session, id=id)
-        await self._emit_frame(error_frame(code, message, id=id, session=session))
+        self._log.warning("error.emitted", code=code, session_id=session_id, id=id)
+        await self._emit_frame(error_frame(code, message, id=id, session_id=session_id))
 
     async def _emit_fatal(self, code: str, message: str) -> None:
         self._fatal = True
@@ -587,7 +587,7 @@ class Connection:
         fight the new owner over it. Events stop flowing here immediately.
         """
         self._owned_sessions.discard(session_id)
-        frame: dict[str, Any] = {"type": "blemeesd.session_taken", "session": session_id}
+        frame: dict[str, Any] = {"type": "blemeesd.session_taken", "session_id": session_id}
         if by_peer_pid is not None:
             frame["by_peer_pid"] = by_peer_pid
         await self._emit_frame(frame)

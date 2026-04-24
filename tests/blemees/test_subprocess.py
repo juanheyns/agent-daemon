@@ -26,9 +26,9 @@ FAKE_CLAUDE = str(Path(__file__).parent / "fake_claude.py")
 def _open_msg(session: str = "s1") -> OpenMessage:
     return OpenMessage(
         id=None,
-        session=session,
+        session_id=session,
         resume=False,
-        fields={"session": session, "tools": ""},
+        fields={"session_id": session, "tools": ""},
     )
 
 
@@ -54,7 +54,7 @@ async def _drain_until_result(queue: asyncio.Queue, session: str) -> list[dict]:
     while True:
         evt = await asyncio.wait_for(queue.get(), timeout=5.0)
         events.append(evt)
-        if evt.get("type") == "claude.result" and evt.get("session") == session:
+        if evt.get("type") == "claude.result" and evt.get("session_id") == session:
             return events
 
 
@@ -80,7 +80,7 @@ async def test_normal_turn_produces_result(monkeypatch):
         assert "claude.stream_event" in kinds
         assert "claude.assistant" in kinds
         assert events[-1]["type"] == "claude.result"
-        assert events[-1]["session"] == "s1"
+        assert events[-1]["session_id"] == "s1"
         assert proc.turn_active is False
     finally:
         await proc.close()
@@ -257,7 +257,7 @@ def test_list_session_files_reads_metadata_and_preview(tmp_path, monkeypatch):
     os.utime(project_dir / "bbb.jsonl", (1_700_000_100, 1_700_000_100))
 
     rows = list_session_files(cwd)
-    assert [r["session"] for r in rows] == ["bbb", "aaa"]
+    assert [r["session_id"] for r in rows] == ["bbb", "aaa"]
     assert rows[0]["mtime_ms"] == 1_700_000_100_000
     assert rows[0]["size"] > 0
     assert rows[0]["preview"] == "Second session"
@@ -271,7 +271,7 @@ def test_list_session_files_omits_preview_when_no_user_line(tmp_path, monkeypatc
     _write_transcript(project_dir / "xxx.jsonl", first_user_text=None)
     rows = list_session_files(cwd)
     assert len(rows) == 1
-    assert rows[0]["session"] == "xxx"
+    assert rows[0]["session_id"] == "xxx"
     assert "preview" not in rows[0]
 
 

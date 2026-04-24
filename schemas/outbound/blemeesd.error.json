@@ -7,7 +7,7 @@
   "properties": {
     "type": { "const": "blemeesd.error" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
-    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "code": {
       "type": "string",
       "enum": [

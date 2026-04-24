@@ -6,9 +6,9 @@
   "type": "object",
   "properties": {
     "type": { "const": "blemeesd.session_taken" },
-    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "by_peer_pid": { "$ref": "https://blemees/schemas/_common.json#/$defs/PeerPid" }
   },
-  "required": ["type", "session"],
+  "required": ["type", "session_id"],
   "additionalProperties": true
 }

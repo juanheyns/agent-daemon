@@ -164,7 +164,7 @@ letting Claude Code apply its defaults.
 {
   "type": "blemeesd.open",
   "id": "req_001",
-  "session": "s_abc",
+  "session_id": "s_abc",
 
   "model": "sonnet",
   "system_prompt": "...",
@@ -249,11 +249,11 @@ multiplexer requires it, so they are not client-tunable knobs.
 
 Daemon reply on success:
 ```json
-{"type":"blemeesd.opened","id":"req_001","session":"s_abc","subprocess_pid":54321}
+{"type":"blemeesd.opened","id":"req_001","session_id":"s_abc","subprocess_pid":54321}
 ```
 On failure:
 ```json
-{"type":"blemeesd.error","id":"req_001","session":"s_abc","code":"spawn_failed","message":"..."}
+{"type":"blemeesd.error","id":"req_001","session_id":"s_abc","code":"spawn_failed","message":"..."}
 ```
 
 ### 5.5 User message
@@ -265,12 +265,12 @@ only rewrites the envelope (`claude.user` → `user`, `session` →
 
 Simple text:
 ```json
-{"type":"claude.user","session":"s_abc","message":{"role":"user","content":"Hello"}}
+{"type":"claude.user","session_id":"s_abc","message":{"role":"user","content":"Hello"}}
 ```
 
 Multimodal: `content` may be an array of CC stream-json blocks:
 ```json
-{"type":"claude.user","session":"s_abc","message":{"role":"user","content":[{"type":"text","text":"What is in this image?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"..."}}]}}
+{"type":"claude.user","session_id":"s_abc","message":{"role":"user","content":[{"type":"text","text":"What is in this image?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"..."}}]}}
 ```
 
 `message.role` must be `"user"`. `message.content` must be a string or an
@@ -283,7 +283,7 @@ No `id` required. Responses stream as events until the turn ends.
 ### 5.6 Event stream (daemon → client)
 
 The daemon reads each line of `claude -p` stdout, parses as JSON, injects
-`"session":"<id>"`, and prepends `claude.` to the native `type` before
+`"session_id":"<id>"`, and prepends `claude.` to the native `type` before
 forwarding. Clients see CC event shapes under a stable namespace
 (`claude.system`, `claude.stream_event`, `claude.assistant`,
 `claude.user`, `claude.result`, `claude.partial_assistant`, etc.). The
@@ -291,11 +291,11 @@ inner payload (e.g. the `event` field of a `stream_event`) is untouched.
 
 Example (abridged):
 ```json
-{"session":"s_abc","type":"claude.system","subtype":"init","model":"claude-sonnet-4-6","tools":["Bash","Read","Edit"]}
-{"session":"s_abc","type":"claude.stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hel"}}}
-{"session":"s_abc","type":"claude.stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"lo"}}}
-{"session":"s_abc","type":"claude.assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello"}]}}
-{"session":"s_abc","type":"claude.result","subtype":"success","duration_ms":1254,"num_turns":1}
+{"session_id":"s_abc","type":"claude.system","subtype":"init","model":"claude-sonnet-4-6","tools":["Bash","Read","Edit"]}
+{"session_id":"s_abc","type":"claude.stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hel"}}}
+{"session_id":"s_abc","type":"claude.stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"lo"}}}
+{"session_id":"s_abc","type":"claude.assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello"}]}}
+{"session_id":"s_abc","type":"claude.result","subtype":"success","duration_ms":1254,"num_turns":1}
 ```
 
 The daemon does NOT translate, filter, deduplicate, or re-shape these events.
@@ -305,7 +305,7 @@ echo to avoid double-counting.
 Events that arrive on the subprocess's **stderr** are wrapped and forwarded
 as well (for visibility into CC warnings / auth errors):
 ```json
-{"session":"s_abc","type":"blemeesd.stderr","line":"..."}
+{"session_id":"s_abc","type":"blemeesd.stderr","line":"..."}
 ```
 These are rate-limited to prevent a broken subprocess from flooding the
 client. Default cap: 50 lines per 10 s; excess dropped with a counter.
@@ -314,14 +314,14 @@ client. Default cap: 50 lines per 10 s; excess dropped with a counter.
 
 Client cancels the in-flight turn:
 ```json
-{"type":"blemeesd.interrupt","session":"s_abc"}
+{"type":"blemeesd.interrupt","session_id":"s_abc"}
 ```
 
 Daemon:
 1. Sends SIGTERM to the subprocess. After 500 ms, SIGKILL if still alive.
 2. Emits `blemeesd.interrupted`:
    ```json
-   {"type":"blemeesd.interrupted","session":"s_abc"}
+   {"type":"blemeesd.interrupted","session_id":"s_abc"}
    ```
 3. Respawns the subprocess immediately with `--resume <session>` (all other
    flags identical to the original open), so the next `claude.user` works
@@ -337,14 +337,14 @@ no turn is in flight.
 
 Explicit session close:
 ```json
-{"type":"blemeesd.close","id":"req_099","session":"s_abc","delete":true}
+{"type":"blemeesd.close","id":"req_099","session_id":"s_abc","delete":true}
 ```
 - `delete: true` → daemon removes the CC session file from disk after kill.
 - `delete: false` (default) → session file retained for later `resume: true`.
 
 Daemon replies:
 ```json
-{"type":"blemeesd.closed","id":"req_099","session":"s_abc"}
+{"type":"blemeesd.closed","id":"req_099","session_id":"s_abc"}
 ```
 
 ### 5.9 Connection close
@@ -383,7 +383,7 @@ another live connection (via `resume: true`). The daemon allows the
 takeover and notifies the previous owner *before* switching the writer:
 
 ```json
-{"type":"blemeesd.session_taken","session":"s_abc","by_peer_pid":12345}
+{"type":"blemeesd.session_taken","session_id":"s_abc","by_peer_pid":12345}
 ```
 
 After this frame the previous connection stops receiving events for
@@ -407,7 +407,7 @@ Errors are `blemeesd.error` frames with a machine-readable `code`. The daemon
 never crashes the process on a per-session error.
 
 ```json
-{"type":"blemeesd.error","id":"req_001","session":"s_abc","code":"claude_crashed","message":"stderr tail: ..."}
+{"type":"blemeesd.error","id":"req_001","session_id":"s_abc","code":"claude_crashed","message":"stderr tail: ..."}
 ```
 
 Error codes the client must handle:
@@ -451,7 +451,7 @@ Recent frames are retained in two places:
 On reconnect, the client may request replay:
 
 ```json
-{"type":"blemeesd.open","id":"r1","session":"s1","resume":true,"last_seen_seq":42}
+{"type":"blemeesd.open","id":"r1","session_id":"s1","resume":true,"last_seen_seq":42}
 ```
 
 The daemon delivers, in order:
@@ -464,7 +464,7 @@ If the buffer has rolled over past `last_seen_seq + 1`, a one-shot
 before the replay so the client can detect the loss:
 
 ```json
-{"type":"blemeesd.replay_gap","session":"s1","since_seq":42,"first_available_seq":71}
+{"type":"blemeesd.replay_gap","session_id":"s1","since_seq":42,"first_available_seq":71}
 ```
 
 Omitting `last_seen_seq` on reattach replays whatever is currently in
@@ -517,7 +517,7 @@ not yet emitted a `result` event, the daemon replies with
 ### 6.3 stdout — event pass-through
 
 The daemon reads stdout line-by-line, parses each line as JSON, injects
-`"session":"<id>"` at the top level, and forwards as one JSON line to the
+`"session_id":"<id>"` at the top level, and forwards as one JSON line to the
 client. Non-JSON stdout is logged and dropped (should not occur; indicates a
 CC bug).
 
@@ -623,14 +623,14 @@ Standard KeepAlive-on-crash plist with `ThrottleInterval=5`.
 ### 9.1 Subprocess crash mid-turn
 On EOF on stdout or non-zero exit during a turn:
 ```json
-{"type":"blemeesd.error","session":"s_abc","code":"claude_crashed","message":"<stderr tail>"}
+{"type":"blemeesd.error","session_id":"s_abc","code":"claude_crashed","message":"<stderr tail>"}
 ```
 Session remains open. Next `claude.user` respawns via `--resume`.
 
 ### 9.2 OAuth expired
 Detect patterns in stderr: `401`, `OAuth token expired`, `Please run claude auth`, `Session authentication failed`. Emit:
 ```json
-{"type":"blemeesd.error","session":"s_abc","code":"oauth_expired","message":"Run `claude auth` to re-authenticate."}
+{"type":"blemeesd.error","session_id":"s_abc","code":"oauth_expired","message":"Run `claude auth` to re-authenticate."}
 ```
 Do not retry automatically. Subsequent user messages repeat the error until
 the user re-auths and the daemon sees a successful spawn.
@@ -764,7 +764,7 @@ from blemees.client import BlemeesClient
 async def main():
     async with BlemeesClient.connect() as c:
         async with c.open_session(
-            session=str(uuid.uuid4()),
+            session_id=str(uuid.uuid4()),
             model="sonnet",
             system_prompt="You are a terse assistant. Answer in one sentence.",
             tools="",                       # client wants pure inference

@@ -7,7 +7,7 @@
   "properties": {
     "type": { "const": "blemeesd.open" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
-    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "resume": {
       "type": "boolean",
       "default": false,
@@ -53,7 +53,7 @@
     "include_partial_messages": { "type": "boolean" },
     "replay_user_messages": { "type": "boolean" }
   },
-  "required": ["type", "session"],
+  "required": ["type", "session_id"],
   "not": {
     "anyOf": [
       { "required": ["dangerously_skip_permissions"] },

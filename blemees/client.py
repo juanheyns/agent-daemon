@@ -3,7 +3,7 @@
 Usage::
 
     async with BlemeesClient.connect() as c:
-        async with c.open_session(session="s1", model="sonnet", tools="") as s:
+        async with c.open_session(session_id="s1", model="sonnet", tools="") as s:
             await s.send_user("hi")
             async for evt in s.events():
                 if evt.get("type") == "claude.result":
@@ -60,18 +60,18 @@ class Session:
             payload: object = content if content is not None else (text or "")
             message = {"role": "user", "content": payload}
         await self._client._send(
-            {"type": "claude.user", "session": self.session_id, "message": message}
+            {"type": "claude.user", "session_id": self.session_id, "message": message}
         )
 
     async def interrupt(self) -> None:
-        await self._client._send({"type": "blemeesd.interrupt", "session": self.session_id})
+        await self._client._send({"type": "blemeesd.interrupt", "session_id": self.session_id})
 
     async def close(self, *, delete: bool = False) -> None:
         if self._closed:
             return
         self._closed = True
         await self._client._send(
-            {"type": "blemeesd.close", "session": self.session_id, "delete": delete}
+            {"type": "blemeesd.close", "session_id": self.session_id, "delete": delete}
         )
 
     async def events(self) -> AsyncIterator[dict[str, Any]]:
@@ -143,23 +143,23 @@ class BlemeesClient:
         return list(reply.get("sessions", []))
 
     @contextlib.asynccontextmanager
-    async def open_session(self, *, session: str, **fields: Any) -> AsyncIterator[Session]:
+    async def open_session(self, *, session_id: str, **fields: Any) -> AsyncIterator[Session]:
         self._next_req += 1
         req_id = f"req_{self._next_req}"
         fut: asyncio.Future = asyncio.get_running_loop().create_future()
         self._pending[req_id] = fut
-        sess = Session(self, session)
-        self._sessions[session] = sess
-        await self._send({"type": "blemeesd.open", "id": req_id, "session": session, **fields})
+        sess = Session(self, session_id)
+        self._sessions[session_id] = sess
+        await self._send({"type": "blemeesd.open", "id": req_id, "session_id": session_id, **fields})
         reply = await fut
         if reply.get("type") == "blemeesd.error":
-            self._sessions.pop(session, None)
+            self._sessions.pop(session_id, None)
             raise BlemeesClientError(reply.get("code", ""), reply.get("message", ""))
         try:
             yield sess
         finally:
             await sess.close()
-            self._sessions.pop(session, None)
+            self._sessions.pop(session_id, None)
 
     async def close(self) -> None:
         if self._reader_task is not None:
@@ -205,9 +205,9 @@ class BlemeesClient:
                     fut = self._pending.pop(req_id)
                     if not fut.done():
                         fut.set_result(evt)
-                session = evt.get("session")
-                if session and session in self._sessions:
-                    self._sessions[session]._deliver(evt)
+                session_id = evt.get("session_id")
+                if session_id and session_id in self._sessions:
+                    self._sessions[session_id]._deliver(evt)
         except (asyncio.IncompleteReadError, ConnectionError, OSError):
             for fut in self._pending.values():
                 if not fut.done():

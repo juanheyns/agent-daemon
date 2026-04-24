@@ -6,10 +6,10 @@
   "type": "object",
   "properties": {
     "type": { "const": "blemeesd.replay_gap" },
-    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "since_seq": { "type": "integer", "minimum": 0 },
     "first_available_seq": { "type": "integer", "minimum": 1 }
   },
-  "required": ["type", "session", "since_seq", "first_available_seq"],
+  "required": ["type", "session_id", "since_seq", "first_available_seq"],
   "additionalProperties": true
 }

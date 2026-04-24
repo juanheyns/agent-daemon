@@ -7,13 +7,13 @@
   "properties": {
     "type": { "const": "blemeesd.close" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
-    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "delete": {
       "type": "boolean",
       "default": false,
       "description": "Remove on-disk transcript (~/.claude/projects/…) and durable event log, if present."
     }
   },
-  "required": ["type", "session"],
+  "required": ["type", "session_id"],
   "additionalProperties": false
 }

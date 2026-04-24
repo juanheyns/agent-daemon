@@ -75,7 +75,7 @@ Open a session (all fields besides `session` optional):
 {
   "type": "blemeesd.open",
   "id": "req_1",
-  "session": "s_abc",
+  "session_id": "s_abc",
   "model": "sonnet",
   "system_prompt": "You are terse.",
   "tools": "",
@@ -89,7 +89,7 @@ stream-json stdin (envelope-only translation — only `claude.user` → `user`
 and `session` → `session_id` are rewritten):
 
 ```json
-{"type":"claude.user","session":"s_abc","message":{"role":"user","content":"Hello"}}
+{"type":"claude.user","session_id":"s_abc","message":{"role":"user","content":"Hello"}}
 ```
 
 For multimodal input, set `message.content` to an array of CC content
@@ -98,13 +98,13 @@ blocks (text, image, etc.).
 Interrupt a turn (SIGTERM → respawn with `--resume`):
 
 ```json
-{"type":"blemeesd.interrupt","session":"s_abc"}
+{"type":"blemeesd.interrupt","session_id":"s_abc"}
 ```
 
 Close (optionally delete on-disk session state):
 
 ```json
-{"type":"blemeesd.close","id":"req_99","session":"s_abc","delete":false}
+{"type":"blemeesd.close","id":"req_99","session_id":"s_abc","delete":false}
 ```
 
 List past sessions for a project directory (parity with interactive
@@ -118,9 +118,9 @@ List past sessions for a project directory (parity with interactive
 {
   "type":"blemeesd.sessions","id":"req_7","cwd":"/home/u/proj",
   "sessions":[
-    {"session":"abc-123","mtime_ms":1745000000000,"size":48123,
+    {"session_id":"abc-123","mtime_ms":1745000000000,"size":48123,
      "attached":false,"preview":"Fix the bug in foo.py"},
-    {"session":"def-456","attached":true}
+    {"session_id":"def-456","attached":true}
   ]
 }
 ```
@@ -146,7 +146,7 @@ On reconnect, the client passes `last_seen_seq` on `blemeesd.open` with
 `resume: true`:
 
 ```json
-{"type":"blemeesd.open","id":"r1","session":"s1","resume":true,"last_seen_seq":42}
+{"type":"blemeesd.open","id":"r1","session_id":"s1","resume":true,"last_seen_seq":42}
 ```
 
 The daemon replays every buffered frame with `seq > 42` before resuming
@@ -154,7 +154,7 @@ live delivery. If the ring has rolled over past the requested seq you
 receive a one-shot `blemeesd.replay_gap` frame first:
 
 ```json
-{"type":"blemeesd.replay_gap","session":"s1","since_seq":42,"first_available_seq":71}
+{"type":"blemeesd.replay_gap","session_id":"s1","since_seq":42,"first_available_seq":71}
 ```
 
 `blemeesd.opened` carries `last_seq` (the highest seq currently known for
@@ -174,7 +174,7 @@ from blemees.client import BlemeesClient
 async def main():
     async with await BlemeesClient.connect() as c:
         async with c.open_session(
-            session=str(uuid.uuid4()),
+            session_id=str(uuid.uuid4()),
             model="sonnet",
             system_prompt="You are a terse assistant. Answer in one sentence.",
             tools="",

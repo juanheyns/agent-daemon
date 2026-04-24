@@ -122,7 +122,7 @@ def test_parse_open_rejects_unsafe_flag_field():
         parse_open(
             {
                 "type": "blemeesd.open",
-                "session": "s1",
+                "session_id": "s1",
                 "dangerously_skip_permissions": True,
             }
         )
@@ -133,7 +133,7 @@ def test_parse_open_rejects_unsafe_flag_literal_in_values():
         parse_open(
             {
                 "type": "blemeesd.open",
-                "session": "s1",
+                "session_id": "s1",
                 "disallowed_tools": ["--dangerously-skip-permissions"],
             }
         )
@@ -144,7 +144,7 @@ def test_parse_open_rejects_client_set_input_format():
         parse_open(
             {
                 "type": "blemeesd.open",
-                "session": "s1",
+                "session_id": "s1",
                 "input_format": "text",
             }
         )
@@ -156,7 +156,7 @@ def test_parse_open_rejects_client_set_output_format():
         parse_open(
             {
                 "type": "blemeesd.open",
-                "session": "s1",
+                "session_id": "s1",
                 "output_format": "json",
             }
         )
@@ -168,7 +168,7 @@ def test_parse_open_allows_bypass_permissions_mode():
     msg = parse_open(
         {
             "type": "blemeesd.open",
-            "session": "s1",
+            "session_id": "s1",
             "permission_mode": "bypassPermissions",
         }
     )
@@ -176,7 +176,7 @@ def test_parse_open_allows_bypass_permissions_mode():
 
 
 def test_build_argv_default_flags_and_session_id():
-    msg = OpenMessage(id=None, session="s1", resume=False, fields={"session": "s1"})
+    msg = OpenMessage(id=None, session_id="s1", resume=False, fields={"session_id": "s1"})
     argv = build_claude_argv("claude", msg)
     assert argv[:3] == ["claude", "-p", "--verbose"]
     assert "--session-id" in argv
@@ -186,7 +186,7 @@ def test_build_argv_default_flags_and_session_id():
 
 
 def test_build_argv_resume_replaces_session_id():
-    msg = OpenMessage(id=None, session="s1", resume=True, fields={"session": "s1"})
+    msg = OpenMessage(id=None, session_id="s1", resume=True, fields={"session_id": "s1"})
     argv = build_claude_argv("claude", msg)
     assert "--resume" in argv
     assert argv[argv.index("--resume") + 1] == "s1"
@@ -194,7 +194,7 @@ def test_build_argv_resume_replaces_session_id():
 
 
 def test_build_argv_for_resume_flag_forces_resume():
-    msg = OpenMessage(id=None, session="s1", resume=False, fields={"session": "s1"})
+    msg = OpenMessage(id=None, session_id="s1", resume=False, fields={"session_id": "s1"})
     argv = build_claude_argv("claude", msg, for_resume=True)
     assert "--resume" in argv
     assert "--session-id" not in argv
@@ -202,7 +202,7 @@ def test_build_argv_for_resume_flag_forces_resume():
 
 def test_build_argv_tools_empty_string_disables_all():
     msg = OpenMessage(
-        id=None, session="s1", resume=False, fields={"session": "s1", "tools": ""}
+        id=None, session_id="s1", resume=False, fields={"session_id": "s1", "tools": ""}
     )
     argv = build_claude_argv("claude", msg)
     i = argv.index("--tools")
@@ -211,7 +211,7 @@ def test_build_argv_tools_empty_string_disables_all():
 
 def test_build_argv_maps_many_fields():
     fields = {
-        "session": "s1",
+        "session_id": "s1",
         "model": "sonnet",
         "system_prompt": "sp",
         "append_system_prompt": "asp",
@@ -237,7 +237,7 @@ def test_build_argv_maps_many_fields():
         "include_partial_messages": True,
         "replay_user_messages": True,
     }
-    msg = OpenMessage(id=None, session="s1", resume=False, fields=fields)
+    msg = OpenMessage(id=None, session_id="s1", resume=False, fields=fields)
     argv = build_claude_argv("claude", msg)
     joined = " ".join(argv)
     assert "--model sonnet" in joined
@@ -266,7 +266,7 @@ def test_build_argv_maps_many_fields():
 
 
 def test_build_argv_unset_fields_omit_flags():
-    msg = OpenMessage(id=None, session="s1", resume=False, fields={"session": "s1"})
+    msg = OpenMessage(id=None, session_id="s1", resume=False, fields={"session_id": "s1"})
     argv = build_claude_argv("claude", msg)
     assert "--model" not in argv
     assert "--system-prompt" not in argv
@@ -281,7 +281,7 @@ def test_parse_user_message_string_content():
     u = parse_user(
         {
             "type": "claude.user",
-            "session": "s1",
+            "session_id": "s1",
             "message": {"role": "user", "content": "hello"},
         }
     )
@@ -293,7 +293,7 @@ def test_parse_user_message_list_content():
     u = parse_user(
         {
             "type": "claude.user",
-            "session": "s1",
+            "session_id": "s1",
             "message": {"role": "user", "content": blocks},
         }
     )
@@ -302,12 +302,12 @@ def test_parse_user_message_list_content():
 
 def test_parse_user_rejects_missing_message():
     with pytest.raises(ProtocolError):
-        parse_user({"type": "claude.user", "session": "s1"})
+        parse_user({"type": "claude.user", "session_id": "s1"})
 
 
 def test_parse_user_rejects_legacy_text_shorthand():
     with pytest.raises(ProtocolError):
-        parse_user({"type": "claude.user", "session": "s1", "text": "hello"})
+        parse_user({"type": "claude.user", "session_id": "s1", "text": "hello"})
 
 
 def test_parse_user_rejects_non_user_role():
@@ -315,7 +315,7 @@ def test_parse_user_rejects_non_user_role():
         parse_user(
             {
                 "type": "claude.user",
-                "session": "s1",
+                "session_id": "s1",
                 "message": {"role": "assistant", "content": "x"},
             }
         )
@@ -326,7 +326,7 @@ def test_parse_user_rejects_non_string_non_list_content():
         parse_user(
             {
                 "type": "claude.user",
-                "session": "s1",
+                "session_id": "s1",
                 "message": {"role": "user", "content": 42},
             }
         )
@@ -358,12 +358,12 @@ def test_parse_interrupt_requires_session():
 
 
 def test_parse_close_defaults_delete_false():
-    c = parse_close({"type": "blemeesd.close", "session": "s1"})
+    c = parse_close({"type": "blemeesd.close", "session_id": "s1"})
     assert c.delete is False
 
 
 def test_parse_close_delete_true():
-    c = parse_close({"type": "blemeesd.close", "session": "s1", "delete": True})
+    c = parse_close({"type": "blemeesd.close", "session_id": "s1", "delete": True})
     assert c.delete is True
 
 
@@ -394,13 +394,13 @@ def test_parse_list_sessions_ok():
 # ---------------------------------------------------------------------------
 
 def test_error_frame_includes_optional_fields():
-    frame = error_frame("invalid_message", "oops", id="req_1", session="s1")
+    frame = error_frame("invalid_message", "oops", id="req_1", session_id="s1")
     assert frame["code"] == "invalid_message"
     assert frame["id"] == "req_1"
-    assert frame["session"] == "s1"
+    assert frame["session_id"] == "s1"
 
 
 def test_error_frame_omits_unset_ids():
     frame = error_frame("internal", "bad")
     assert "id" not in frame
-    assert "session" not in frame
+    assert "session_id" not in frame

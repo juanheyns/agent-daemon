@@ -54,13 +54,13 @@
       "type": "object",
       "description": "One row in a blemeesd.sessions reply.",
       "properties": {
-        "session": { "$ref": "#/$defs/SessionId" },
+        "session_id": { "$ref": "#/$defs/SessionId" },
         "attached": { "type": "boolean" },
         "mtime_ms": { "type": "integer", "minimum": 0 },
         "size": { "type": "integer", "minimum": 0 },
         "preview": { "type": "string" }
       },
-      "required": ["session", "attached"],
+      "required": ["session_id", "attached"],
       "additionalProperties": true
     }
   }

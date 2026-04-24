@@ -23,7 +23,7 @@ import time
 import uuid
 
 from . import PROTOCOL_VERSION
-from .client import CcsockClient, default_socket_path
+from .client import BlemeesClient, default_socket_path
 
 
 async def _first_event_latency(sess, prompt: str) -> float:
@@ -53,11 +53,11 @@ async def run_one(socket_path: str, model: str, prompt: str) -> dict[str, float]
     results: dict[str, float] = {}
     session_id = str(uuid.uuid4())
 
-    async with await CcsockClient.connect(socket_path) as c:
+    async with await BlemeesClient.connect(socket_path) as c:
         # Cold open
         t_open = time.monotonic()
         async with c.open_session(
-            session=session_id, model=model, tools="", permission_mode="bypassPermissions"
+            session_id=session_id, model=model, tools="", permission_mode="bypassPermissions"
         ) as sess:
             cold_latency = await _first_event_latency(sess, prompt)
             results["cold_first_event"] = cold_latency
@@ -70,10 +70,10 @@ async def run_one(socket_path: str, model: str, prompt: str) -> dict[str, float]
             await _drain_to_result(sess)
 
     # Resume: reconnect and re-open with resume:true.
-    async with await CcsockClient.connect(socket_path) as c:
+    async with await BlemeesClient.connect(socket_path) as c:
         t_resume = time.monotonic()
         async with c.open_session(
-            session=session_id,
+            session_id=session_id,
             model=model,
             tools="",
             resume=True,

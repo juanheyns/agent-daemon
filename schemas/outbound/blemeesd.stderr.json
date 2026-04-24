@@ -6,10 +6,10 @@
   "type": "object",
   "properties": {
     "type": { "const": "blemeesd.stderr" },
-    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "line": { "type": "string" },
     "seq": { "$ref": "https://blemees/schemas/_common.json#/$defs/Seq" }
   },
-  "required": ["type", "session", "line"],
+  "required": ["type", "session_id", "line"],
   "additionalProperties": true
 }

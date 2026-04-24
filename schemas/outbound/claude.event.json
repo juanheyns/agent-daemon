@@ -9,9 +9,9 @@
       "type": "string",
       "pattern": "^claude\\.[a-z_][a-z0-9_]*$"
     },
-    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "seq": { "$ref": "https://blemees/schemas/_common.json#/$defs/Seq" }
   },
-  "required": ["type", "session", "seq"],
+  "required": ["type", "session_id", "seq"],
   "additionalProperties": true
 }

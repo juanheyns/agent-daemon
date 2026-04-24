@@ -6,9 +6,9 @@
   "type": "object",
   "properties": {
     "type": { "const": "claude.user" },
-    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "message": { "$ref": "https://blemees/schemas/_common.json#/$defs/ClaudeUserMessage" }
   },
-  "required": ["type", "session", "message"],
+  "required": ["type", "session_id", "message"],
   "additionalProperties": false
 }

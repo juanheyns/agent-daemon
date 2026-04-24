@@ -7,10 +7,10 @@
   "properties": {
     "type": { "const": "blemeesd.opened" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
-    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "subprocess_pid": { "type": "integer" },
     "last_seq": { "type": "integer", "minimum": 0 }
   },
-  "required": ["type", "session"],
+  "required": ["type", "session_id"],
   "additionalProperties": true
 }

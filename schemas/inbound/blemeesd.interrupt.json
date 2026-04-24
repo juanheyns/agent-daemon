@@ -6,8 +6,8 @@
   "type": "object",
   "properties": {
     "type": { "const": "blemeesd.interrupt" },
-    "session": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" }
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" }
   },
-  "required": ["type", "session"],
+  "required": ["type", "session_id"],
   "additionalProperties": false
 }

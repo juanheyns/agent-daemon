@@ -3,7 +3,7 @@
 Responsibilities:
     * Spawn and respawn (``--resume``) the child with a fixed argv template.
     * Feed ``claude.user`` turns to stdin.
-    * Parse stdout stream-json events; inject ``"session"`` and enqueue to the
+    * Parse stdout stream-json events; inject ``"session_id"`` and enqueue to the
       connection event queue.
     * Rate-limit stderr lines, detect OAuth-expiry signatures, surface
       ``claude_crashed`` on non-zero exit mid-turn.
@@ -234,7 +234,7 @@ class ClaudeSubprocess:
                 continue
             if not isinstance(event, dict):
                 continue
-            event["session"] = self.session_id
+            event["session_id"] = self.session_id
             # Detect turn-end against the native CC type *before* namespacing
             # it, so the check stays stable if we ever change the prefix.
             orig_type = event.get("type")
@@ -274,7 +274,7 @@ class ClaudeSubprocess:
                 await self._enqueue(
                     {
                         "type": "blemeesd.error",
-                        "session": self.session_id,
+                        "session_id": self.session_id,
                         "code": OAUTH_EXPIRED,
                         "message": "Run `claude auth` to re-authenticate.",
                     }
@@ -285,7 +285,7 @@ class ClaudeSubprocess:
                 await self._enqueue(
                     {
                         "type": "blemeesd.stderr",
-                        "session": self.session_id,
+                        "session_id": self.session_id,
                         "line": line,
                     }
                 )
@@ -302,7 +302,7 @@ class ClaudeSubprocess:
             await self._enqueue(
                 {
                     "type": "blemeesd.error",
-                    "session": self.session_id,
+                    "session_id": self.session_id,
                     "code": CLAUDE_CRASHED,
                     "message": f"stderr tail: {tail}"[:2048],
                 }
@@ -434,7 +434,7 @@ def list_session_files(cwd: str | None) -> list[dict]:
         except OSError:
             continue
         record: dict = {
-            "session": entry.stem,
+            "session_id": entry.stem,
             "mtime_ms": int(st.st_mtime * 1000),
             "size": st.st_size,
         }

@@ -99,7 +99,7 @@ def test_inbound_open_minimal(store_and_registry):
         store,
         reg,
         "https://blemees/schemas/inbound/blemeesd.open.json",
-        {"type": "blemeesd.open", "session": "s1"},
+        {"type": "blemeesd.open", "session_id": "s1"},
     )
 
 
@@ -111,7 +111,7 @@ def test_inbound_open_rejects_unsafe_flag(store_and_registry):
         "https://blemees/schemas/inbound/blemeesd.open.json",
         {
             "type": "blemeesd.open",
-            "session": "s1",
+            "session_id": "s1",
             "dangerously_skip_permissions": True,
         },
     )
@@ -123,7 +123,7 @@ def test_inbound_open_rejects_input_format(store_and_registry):
         store,
         reg,
         "https://blemees/schemas/inbound/blemeesd.open.json",
-        {"type": "blemeesd.open", "session": "s1", "input_format": "text"},
+        {"type": "blemeesd.open", "session_id": "s1", "input_format": "text"},
     )
 
 
@@ -135,7 +135,7 @@ def test_inbound_claude_user_string_content(store_and_registry):
         "https://blemees/schemas/inbound/claude.user.json",
         {
             "type": "claude.user",
-            "session": "s1",
+            "session_id": "s1",
             "message": {"role": "user", "content": "hi"},
         },
     )
@@ -149,7 +149,7 @@ def test_inbound_claude_user_multimodal_content(store_and_registry):
         "https://blemees/schemas/inbound/claude.user.json",
         {
             "type": "claude.user",
-            "session": "s1",
+            "session_id": "s1",
             "message": {
                 "role": "user",
                 "content": [
@@ -172,7 +172,7 @@ def test_inbound_claude_user_rejects_wrong_role(store_and_registry):
         "https://blemees/schemas/inbound/claude.user.json",
         {
             "type": "claude.user",
-            "session": "s1",
+            "session_id": "s1",
             "message": {"role": "assistant", "content": "x"},
         },
     )
@@ -184,7 +184,7 @@ def test_inbound_claude_user_rejects_legacy_text_shorthand(store_and_registry):
         store,
         reg,
         "https://blemees/schemas/inbound/claude.user.json",
-        {"type": "claude.user", "session": "s1", "text": "hi"},
+        {"type": "claude.user", "session_id": "s1", "text": "hi"},
     )
 
 
@@ -223,7 +223,7 @@ def test_outbound_opened_carries_last_seq(store_and_registry):
         {
             "type": "blemeesd.opened",
             "id": "r1",
-            "session": "s1",
+            "session_id": "s1",
             "subprocess_pid": 9999,
             "last_seq": 0,
         },
@@ -254,7 +254,7 @@ def test_outbound_replay_gap_shape(store_and_registry):
         "https://blemees/schemas/outbound/blemeesd.replay_gap.json",
         {
             "type": "blemeesd.replay_gap",
-            "session": "s1",
+            "session_id": "s1",
             "since_seq": 42,
             "first_available_seq": 71,
         },
@@ -267,7 +267,7 @@ def test_outbound_session_taken_ok(store_and_registry):
         store,
         reg,
         "https://blemees/schemas/outbound/blemeesd.session_taken.json",
-        {"type": "blemeesd.session_taken", "session": "s1", "by_peer_pid": 12345},
+        {"type": "blemeesd.session_taken", "session_id": "s1", "by_peer_pid": 12345},
     )
 
 
@@ -280,7 +280,7 @@ def test_outbound_claude_event_envelope(store_and_registry):
         schema_id,
         {
             "type": "claude.stream_event",
-            "session": "s1",
+            "session_id": "s1",
             "seq": 3,
             "event": {
                 "type": "content_block_delta",
@@ -293,14 +293,14 @@ def test_outbound_claude_event_envelope(store_and_registry):
         store,
         reg,
         schema_id,
-        {"type": "system", "session": "s1", "seq": 1},
+        {"type": "system", "session_id": "s1", "seq": 1},
     )
     # Requires seq for session-stream frames.
     _assert_invalid(
         store,
         reg,
         schema_id,
-        {"type": "claude.system", "session": "s1"},
+        {"type": "claude.system", "session_id": "s1"},
     )
 
 
@@ -316,13 +316,13 @@ def test_outbound_sessions_listing(store_and_registry):
             "cwd": "/home/u/proj",
             "sessions": [
                 {
-                    "session": "abc",
+                    "session_id": "abc",
                     "attached": False,
                     "mtime_ms": 1745000000000,
                     "size": 4321,
                     "preview": "fix the bug",
                 },
-                {"session": "live", "attached": True},
+                {"session_id": "live", "attached": True},
             ],
         },
     )

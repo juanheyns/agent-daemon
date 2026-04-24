@@ -76,7 +76,7 @@ def test_event_log_path_joins():
 # ---------------------------------------------------------------------------
 
 def _open_msg(session: str = "s1") -> OpenMessage:
-    return OpenMessage(id=None, session=session, resume=False, fields={"session": session})
+    return OpenMessage(id=None, session_id=session, resume=False, fields={"session_id": session})
 
 
 async def test_session_assigns_monotonic_seq_and_buffers():
@@ -87,8 +87,8 @@ async def test_session_assigns_monotonic_seq_and_buffers():
         seen.append(frame)
 
     await sess.attach(connection_id=1, writer=writer)
-    await sess.on_event({"type": "stream_event", "session": "s1"})
-    await sess.on_event({"type": "stream_event", "session": "s1"})
+    await sess.on_event({"type": "stream_event", "session_id": "s1"})
+    await sess.on_event({"type": "stream_event", "session_id": "s1"})
     assert [f["seq"] for f in seen] == [1, 2]
     assert [f["seq"] for f in sess.ring.since(0)] == [1, 2]
 
@@ -98,7 +98,7 @@ async def test_session_replays_since_last_seen_seq():
 
     # Fill before attach: emulates events arriving while detached.
     for _ in range(5):
-        await sess.on_event({"type": "stream_event", "session": "s1"})
+        await sess.on_event({"type": "stream_event", "session_id": "s1"})
 
     seen: list[dict] = []
 
@@ -115,7 +115,7 @@ async def test_session_emits_replay_gap_when_ring_rolled_over():
     sess = Session(session_id="s1", open_msg=_open_msg(), cwd=None)
     sess.ring = RingBuffer(3)
     for _ in range(10):
-        await sess.on_event({"type": "stream_event", "session": "s1"})
+        await sess.on_event({"type": "stream_event", "session_id": "s1"})
 
     seen: list[dict] = []
 
@@ -132,7 +132,7 @@ async def test_session_emits_replay_gap_when_ring_rolled_over():
 async def test_session_no_replay_when_last_seen_seq_is_caught_up():
     sess = Session(session_id="s1", open_msg=_open_msg(), cwd=None)
     for _ in range(3):
-        await sess.on_event({"type": "stream_event", "session": "s1"})
+        await sess.on_event({"type": "stream_event", "session_id": "s1"})
     seen: list[dict] = []
 
     async def writer(frame):
@@ -147,7 +147,7 @@ async def test_session_durable_log_persists_and_reloads(tmp_path):
     sess1 = Session(session_id="s1", open_msg=_open_msg(), cwd=None)
     sess1.enable_durable_log(tmp_path)
     for _ in range(4):
-        await sess1.on_event({"type": "stream_event", "session": "s1"})
+        await sess1.on_event({"type": "stream_event", "session_id": "s1"})
     sess1.log.close()
 
     # Simulate a daemon restart: new Session with same id picks up the log.
@@ -175,9 +175,9 @@ async def test_session_detach_writer_stops_delivery():
         seen.append(frame)
 
     await sess.attach(connection_id=1, writer=writer)
-    await sess.on_event({"type": "stream_event", "session": "s1"})
+    await sess.on_event({"type": "stream_event", "session_id": "s1"})
     sess.detach_writer()
-    await sess.on_event({"type": "stream_event", "session": "s1"})
+    await sess.on_event({"type": "stream_event", "session_id": "s1"})
     assert len(seen) == 1
     # Still buffered for a future attach.
     assert len(sess.ring) == 2
@@ -196,7 +196,7 @@ async def test_session_finishing_triggers_soft_kill_on_result():
     sess.subprocess = sub  # type: ignore[assignment]
     sess.mark_finishing()
 
-    await sess.on_event({"type": "claude.result", "session": "s1", "subtype": "success"})
+    await sess.on_event({"type": "claude.result", "session_id": "s1", "subtype": "success"})
     # Give the scheduled close task a chance to run.
     await asyncio.sleep(0.01)
     assert sub.closed is True

@@ -122,7 +122,7 @@ class Session:
             await writer(
                 {
                     "type": "blemeesd.replay_gap",
-                    "session": self.session_id,
+                    "session_id": self.session_id,
                     "since_seq": last_seen_seq,
                     "first_available_seq": earliest,
                     "seq": None,  # informational, not part of the seq stream
@@ -134,7 +134,7 @@ class Session:
             await writer(
                 {
                     "type": "blemeesd.replay_gap",
-                    "session": self.session_id,
+                    "session_id": self.session_id,
                     "since_seq": last_seen_seq,
                     "first_available_seq": self.seq + 1,
                     "seq": None,
@@ -208,7 +208,7 @@ class SessionTable:
     def new_session(self, open_msg: OpenMessage) -> Session:
         """Instantiate (but don't register) a ``Session`` with table defaults."""
         sess = Session(
-            session_id=open_msg.session,
+            session_id=open_msg.session_id,
             open_msg=open_msg,
             cwd=open_msg.fields.get("cwd"),
             ring=RingBuffer(self.ring_buffer_size),

@@ -55,13 +55,13 @@ async def test_open_then_user_then_result(client_factory, fake_mode):
     fake_mode("normal")
     client = await client_factory()
     await client.send(
-        {"type": "blemeesd.open", "id": "r1", "session": "s1", "tools": ""}
+        {"type": "blemeesd.open", "id": "r1", "session_id": "s1", "tools": ""}
     )
     opened = await client.wait_for(lambda e: e["type"] == "blemeesd.opened")
-    assert opened["session"] == "s1"
-    await client.send({"type": "claude.user", "session": "s1", "message": {"role": "user", "content": "hello"}})
+    assert opened["session_id"] == "s1"
+    await client.send({"type": "claude.user", "session_id": "s1", "message": {"role": "user", "content": "hello"}})
     result = await client.wait_for(
-        lambda e: e.get("type") == "claude.result" and e.get("session") == "s1"
+        lambda e: e.get("type") == "claude.result" and e.get("session_id") == "s1"
     )
     assert result["subtype"] == "success"
 
@@ -72,7 +72,7 @@ async def test_unsafe_flag_rejected_on_open(client_factory):
         {
             "type": "blemeesd.open",
             "id": "r1",
-            "session": "s1",
+            "session_id": "s1",
             "dangerously_skip_permissions": True,
         }
     )
@@ -82,7 +82,7 @@ async def test_unsafe_flag_rejected_on_open(client_factory):
 
 async def test_unknown_message_returns_error(client_factory):
     client = await client_factory()
-    await client.send({"type": "blemeesd.nonsense", "session": "s1"})
+    await client.send({"type": "blemeesd.nonsense", "session_id": "s1"})
     err = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
     assert err["code"] == "unknown_message"
 
@@ -103,7 +103,7 @@ async def test_session_flag_mapping_in_argv(
         {
             "type": "blemeesd.open",
             "id": "r1",
-            "session": "s-map",
+            "session_id": "s-map",
             "model": "sonnet",
             "tools": "",
             "permission_mode": "bypassPermissions",
@@ -134,7 +134,7 @@ async def test_resume_flag_used_when_requested(
         {
             "type": "blemeesd.open",
             "id": "r1",
-            "session": "s-resume",
+            "session_id": "s-resume",
             "resume": True,
             "tools": "",
         }
@@ -152,13 +152,13 @@ async def test_interrupt_respawns_with_resume(
     fake_mode("slow")
     client = await client_factory()
     await client.send(
-        {"type": "blemeesd.open", "id": "r1", "session": "s-int", "tools": ""}
+        {"type": "blemeesd.open", "id": "r1", "session_id": "s-int", "tools": ""}
     )
     await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
-    await client.send({"type": "claude.user", "session": "s-int", "message": {"role": "user", "content": "go"}})
+    await client.send({"type": "claude.user", "session_id": "s-int", "message": {"role": "user", "content": "go"}})
     # Wait until streaming starts.
     await client.wait_for(lambda e: e.get("type") == "claude.stream_event")
-    await client.send({"type": "blemeesd.interrupt", "session": "s-int"})
+    await client.send({"type": "blemeesd.interrupt", "session_id": "s-int"})
     ir = await client.wait_for(lambda e: e.get("type") == "blemeesd.interrupted")
     assert ir["was_idle"] is False
 
@@ -181,19 +181,19 @@ async def test_concurrent_sessions_dont_interfere(client_factory, fake_mode):
     client = await client_factory()
     for sid in ("a", "b", "c"):
         await client.send(
-            {"type": "blemeesd.open", "id": f"r{sid}", "session": sid, "tools": ""}
+            {"type": "blemeesd.open", "id": f"r{sid}", "session_id": sid, "tools": ""}
         )
     opens = set()
     while len(opens) < 3:
         evt = await client.recv(timeout=5.0)
         if evt.get("type") == "blemeesd.opened":
-            opens.add(evt["session"])
+            opens.add(evt["session_id"])
 
     for sid in ("a", "b", "c"):
         await client.send(
             {
                 "type": "claude.user",
-                "session": sid,
+                "session_id": sid,
                 "message": {"role": "user", "content": f"hi-{sid}"},
             }
         )
@@ -201,8 +201,8 @@ async def test_concurrent_sessions_dont_interfere(client_factory, fake_mode):
     saw: dict[str, bool] = {}
     while len(saw) < 3:
         evt = await client.recv(timeout=5.0)
-        if evt.get("type") == "claude.result" and evt.get("session") in {"a", "b", "c"}:
-            saw[evt["session"]] = True
+        if evt.get("type") == "claude.result" and evt.get("session_id") in {"a", "b", "c"}:
+            saw[evt["session_id"]] = True
     assert set(saw) == {"a", "b", "c"}
 
 
@@ -212,20 +212,20 @@ async def test_crash_mid_turn_then_recover(
     fake_mode("crash")
     client = await client_factory()
     await client.send(
-        {"type": "blemeesd.open", "id": "r1", "session": "s-crash", "tools": ""}
+        {"type": "blemeesd.open", "id": "r1", "session_id": "s-crash", "tools": ""}
     )
     await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
-    await client.send({"type": "claude.user", "session": "s-crash", "message": {"role": "user", "content": "boom"}})
+    await client.send({"type": "claude.user", "session_id": "s-crash", "message": {"role": "user", "content": "boom"}})
     err = await client.wait_for(
         lambda e: e.get("type") == "blemeesd.error" and e.get("code") == "claude_crashed"
     )
-    assert err["session"] == "s-crash"
+    assert err["session_id"] == "s-crash"
 
     # Next user message should transparently respawn (spec §9.1).
     fake_mode("normal")
-    await client.send({"type": "claude.user", "session": "s-crash", "message": {"role": "user", "content": "again"}})
+    await client.send({"type": "claude.user", "session_id": "s-crash", "message": {"role": "user", "content": "again"}})
     await client.wait_for(
-        lambda e: e.get("type") == "claude.result" and e.get("session") == "s-crash"
+        lambda e: e.get("type") == "claude.result" and e.get("session_id") == "s-crash"
     )
 
 
@@ -233,18 +233,18 @@ async def test_close_removes_session(client_factory, fake_mode):
     fake_mode("normal")
     client = await client_factory()
     await client.send(
-        {"type": "blemeesd.open", "id": "r1", "session": "s-close", "tools": ""}
+        {"type": "blemeesd.open", "id": "r1", "session_id": "s-close", "tools": ""}
     )
     await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
     await client.send(
-        {"type": "blemeesd.close", "id": "r2", "session": "s-close", "delete": False}
+        {"type": "blemeesd.close", "id": "r2", "session_id": "s-close", "delete": False}
     )
     closed = await client.wait_for(lambda e: e.get("type") == "blemeesd.closed")
-    assert closed["session"] == "s-close"
+    assert closed["session_id"] == "s-close"
 
     # Re-open without resume should succeed since session is gone.
     await client.send(
-        {"type": "blemeesd.open", "id": "r3", "session": "s-close", "tools": ""}
+        {"type": "blemeesd.open", "id": "r3", "session_id": "s-close", "tools": ""}
     )
     await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
 
@@ -253,7 +253,7 @@ async def test_detach_allows_reattach_via_resume(client_factory, fake_mode):
     fake_mode("normal")
     c1 = await client_factory()
     await c1.send(
-        {"type": "blemeesd.open", "id": "r1", "session": "s-det", "tools": ""}
+        {"type": "blemeesd.open", "id": "r1", "session_id": "s-det", "tools": ""}
     )
     await c1.wait_for(lambda e: e.get("type") == "blemeesd.opened")
     await c1.close()
@@ -264,7 +264,7 @@ async def test_detach_allows_reattach_via_resume(client_factory, fake_mode):
         {
             "type": "blemeesd.open",
             "id": "r2",
-            "session": "s-det",
+            "session_id": "s-det",
             "resume": True,
             "tools": "",
         }
@@ -348,7 +348,7 @@ async def test_list_sessions_returns_sorted_on_disk(client_factory, tmp_path, mo
     client = await client_factory()
     await client.send({"type": "blemeesd.list_sessions", "id": "r1", "cwd": cwd})
     reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
-    ids = [s["session"] for s in reply["sessions"]]
+    ids = [s["session_id"] for s in reply["sessions"]]
     assert ids == ["newer", "older"]
     assert reply["sessions"][0]["preview"] == "new one"
     assert reply["sessions"][0]["attached"] is False
@@ -366,7 +366,7 @@ async def test_list_sessions_flags_attached(
         {
             "type": "blemeesd.open",
             "id": "r1",
-            "session": "live",
+            "session_id": "live",
             "tools": "",
             "cwd": cwd,
         }
@@ -375,7 +375,7 @@ async def test_list_sessions_flags_attached(
 
     await client.send({"type": "blemeesd.list_sessions", "id": "r2", "cwd": cwd})
     reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
-    records = {s["session"]: s for s in reply["sessions"]}
+    records = {s["session_id"]: s for s in reply["sessions"]}
     assert "live" in records
     assert records["live"]["attached"] is True
 
@@ -389,7 +389,7 @@ async def test_takeover_notifies_previous_owner(client_factory, fake_mode):
     a = await client_factory()
     b = await client_factory()
 
-    await a.send({"type": "blemeesd.open", "id": "r1", "session": "shared", "tools": ""})
+    await a.send({"type": "blemeesd.open", "id": "r1", "session_id": "shared", "tools": ""})
     await a.wait_for(lambda e: e.get("type") == "blemeesd.opened")
 
     # B takes over via resume=true.
@@ -397,7 +397,7 @@ async def test_takeover_notifies_previous_owner(client_factory, fake_mode):
         {
             "type": "blemeesd.open",
             "id": "r2",
-            "session": "shared",
+            "session_id": "shared",
             "resume": True,
             "tools": "",
         }
@@ -406,23 +406,23 @@ async def test_takeover_notifies_previous_owner(client_factory, fake_mode):
     # A must see the notification.
     notice = await a.wait_for(
         lambda e: e.get("type") == "blemeesd.session_taken"
-        and e.get("session") == "shared"
+        and e.get("session_id") == "shared"
     )
     # Informational peer_pid may be absent in tests (no SO_PEERCRED capture
     # for in-process unix sockets on some kernels), but the frame must arrive.
-    assert notice["session"] == "shared"
+    assert notice["session_id"] == "shared"
 
     # B's ack arrives and the event stream now flows to B.
     await b.wait_for(lambda e: e.get("type") == "blemeesd.opened")
     await b.send(
         {
             "type": "claude.user",
-            "session": "shared",
+            "session_id": "shared",
             "message": {"role": "user", "content": "hi"},
         }
     )
     await b.wait_for(
-        lambda e: e.get("type") == "claude.result" and e.get("session") == "shared"
+        lambda e: e.get("type") == "claude.result" and e.get("session_id") == "shared"
     )
 
 
@@ -431,7 +431,7 @@ async def test_no_takeover_notice_for_same_connection_reopen(
 ):
     fake_mode("normal")
     c = await client_factory()
-    await c.send({"type": "blemeesd.open", "id": "r1", "session": "self", "tools": ""})
+    await c.send({"type": "blemeesd.open", "id": "r1", "session_id": "self", "tools": ""})
     await c.wait_for(lambda e: e.get("type") == "blemeesd.opened")
 
     # Reopen from the same connection with resume=true — no takeover.
@@ -439,7 +439,7 @@ async def test_no_takeover_notice_for_same_connection_reopen(
         {
             "type": "blemeesd.open",
             "id": "r2",
-            "session": "self",
+            "session_id": "self",
             "resume": True,
             "tools": "",
         }

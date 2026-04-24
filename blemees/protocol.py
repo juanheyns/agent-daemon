@@ -56,13 +56,13 @@ def error_frame(
     message: str,
     *,
     id: str | None = None,
-    session: str | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     frame: dict[str, Any] = {"type": "blemeesd.error", "code": code, "message": message}
     if id is not None:
         frame["id"] = id
-    if session is not None:
-        frame["session"] = session
+    if session_id is not None:
+        frame["session_id"] = session_id
     return frame
 
 
@@ -105,7 +105,7 @@ class HelloMessage:
 @dataclasses.dataclass(slots=True)
 class OpenMessage:
     id: str | None
-    session: str
+    session_id: str
     resume: bool
     fields: dict[str, Any]  # raw validated fields for flag mapping
     last_seen_seq: int | None = None
@@ -113,19 +113,19 @@ class OpenMessage:
 
 @dataclasses.dataclass(slots=True)
 class UserMessage:
-    session: str
+    session_id: str
     message: dict[str, Any]  # pass-through to ``claude -p`` stream-json stdin
 
 
 @dataclasses.dataclass(slots=True)
 class InterruptMessage:
-    session: str
+    session_id: str
 
 
 @dataclasses.dataclass(slots=True)
 class CloseMessage:
     id: str | None
-    session: str
+    session_id: str
     delete: bool
 
 
@@ -171,7 +171,7 @@ UNSAFE_LITERAL_FLAGS: frozenset[str] = frozenset(
 
 _OPEN_VALID_FIELDS = {
     "id",
-    "session",
+    "session_id",
     "resume",
     "last_seen_seq",
     "model",
@@ -210,8 +210,8 @@ FIXED_FLAG_FIELDS: frozenset[str] = frozenset({"input_format", "output_format"})
 
 
 def parse_open(obj: dict[str, Any]) -> OpenMessage:
-    session = obj.get("session")
-    if not isinstance(session, str) or not session:
+    session_id = obj.get("session_id")
+    if not isinstance(session_id, str) or not session_id:
         raise ProtocolError("open requires non-empty 'session'")
     resume = bool(obj.get("resume", False))
 
@@ -255,7 +255,7 @@ def parse_open(obj: dict[str, Any]) -> OpenMessage:
 
     return OpenMessage(
         id=req_id,
-        session=session,
+        session_id=session_id,
         resume=resume,
         fields=fields,
         last_seen_seq=last_seen_seq,
@@ -263,8 +263,8 @@ def parse_open(obj: dict[str, Any]) -> OpenMessage:
 
 
 def parse_user(obj: dict[str, Any]) -> UserMessage:
-    session = obj.get("session")
-    if not isinstance(session, str) or not session:
+    session_id = obj.get("session_id")
+    if not isinstance(session_id, str) or not session_id:
         raise ProtocolError("user requires 'session'")
     message = obj.get("message")
     if not isinstance(message, dict):
@@ -277,25 +277,25 @@ def parse_user(obj: dict[str, Any]) -> UserMessage:
     content = message.get("content")
     if not isinstance(content, (str, list)):
         raise ProtocolError("message.content must be a string or array")
-    return UserMessage(session=session, message=message)
+    return UserMessage(session_id=session_id, message=message)
 
 
 def parse_interrupt(obj: dict[str, Any]) -> InterruptMessage:
-    session = obj.get("session")
-    if not isinstance(session, str) or not session:
+    session_id = obj.get("session_id")
+    if not isinstance(session_id, str) or not session_id:
         raise ProtocolError("interrupt requires 'session'")
-    return InterruptMessage(session=session)
+    return InterruptMessage(session_id=session_id)
 
 
 def parse_close(obj: dict[str, Any]) -> CloseMessage:
-    session = obj.get("session")
-    if not isinstance(session, str) or not session:
+    session_id = obj.get("session_id")
+    if not isinstance(session_id, str) or not session_id:
         raise ProtocolError("close requires 'session'")
     delete = bool(obj.get("delete", False))
     req_id = obj.get("id")
     if req_id is not None and not isinstance(req_id, str):
         raise ProtocolError("'id' must be a string")
-    return CloseMessage(id=req_id, session=session, delete=delete)
+    return CloseMessage(id=req_id, session_id=session_id, delete=delete)
 
 
 def parse_list_sessions(obj: dict[str, Any]) -> ListSessionsMessage:
@@ -332,9 +332,9 @@ def build_claude_argv(
 
     use_resume = for_resume or open_msg.resume
     if use_resume:
-        argv += ["--resume", open_msg.session]
+        argv += ["--resume", open_msg.session_id]
     else:
-        argv += ["--session-id", open_msg.session]
+        argv += ["--session-id", open_msg.session_id]
 
     # stream-json both ways is fixed by the daemon — see FIXED_FLAG_FIELDS.
     # The event multiplexer parses JSON lines off stdout and expects JSON
@@ -411,12 +411,12 @@ def build_claude_argv(
     return argv
 
 
-def build_user_stdin_line(session: str, *, message: dict[str, Any]) -> bytes:
+def build_user_stdin_line(session_id: str, *, message: dict[str, Any]) -> bytes:
     """Envelope-only translation of ``claude.user`` to CC's stream-json stdin.
 
     The inbound frame already carries a validated ``message`` dict in CC's
     native shape; the daemon only swaps the outer ``type`` and renames
     ``session`` to ``session_id`` for the subprocess.
     """
-    payload = {"type": "user", "message": message, "session_id": session}
+    payload = {"type": "user", "message": message, "session_id": session_id}
     return (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
