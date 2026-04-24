@@ -838,6 +838,37 @@ Inspect: `brew services list`, `launchctl list | grep blemees`,
 Socket: `$XDG_RUNTIME_DIR/blemeesd.sock` (= `/run/user/<uid>/blemeesd.sock`).
 Inspect: `systemctl --user status blemeesd`, `journalctl --user -u blemeesd -f`.
 
+#### Finding the `claude` binary
+
+Services do **not** inherit your shell's `PATH`. `brew services` and
+systemd `--user` start with a minimal `PATH` (`/usr/bin:/bin:...`) plus
+whatever the unit file adds. The tap formula extends it to cover
+`~/.local/bin`, `~/bin`, and `$HOMEBREW_PREFIX/bin`, which is where the
+standalone installer puts `claude`. The symptom when this is wrong is a
+healthy `daemon.start` line but every session ending in `spawn_failed`.
+
+If your `claude` lives elsewhere (npm global under `~/.nvm/...`, a
+custom path, etc.), override with `BLEMEESD_CLAUDE`:
+
+- macOS:
+  ```bash
+  launchctl setenv BLEMEESD_CLAUDE "$(which claude)"
+  brew services restart blemees
+  ```
+  `launchctl setenv` persists until reboot; for durable override, add an
+  `EnvironmentVariables` block to the plist.
+- Linux:
+  ```bash
+  systemctl --user edit blemeesd
+  # add in the editor:
+  #   [Service]
+  #   Environment="BLEMEESD_CLAUDE=/full/path/to/claude"
+  systemctl --user restart blemeesd
+  ```
+
+Or bake `--claude /full/path/to/claude` into the unit's `ExecStart` /
+plist `ProgramArguments`.
+
 #### Running at boot
 
 You probably do not want this — `claude` runs with whatever privileges the
