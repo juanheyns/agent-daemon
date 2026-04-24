@@ -15,16 +15,15 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from . import PROTOCOL_VERSION
 from .errors import (
-    INVALID_MESSAGE,
     OversizeMessageError,
     ProtocolError,
     UnsafeFlagError,
 )
-
 
 DEFAULT_MAX_LINE_BYTES = 16 * 1024 * 1024
 
@@ -33,12 +32,11 @@ DEFAULT_MAX_LINE_BYTES = 16 * 1024 * 1024
 # Outbound helpers (daemon → client).
 # ---------------------------------------------------------------------------
 
+
 def encode(obj: dict[str, Any]) -> bytes:
     """Encode a message as a single UTF-8 JSON line (with trailing ``\\n``)."""
     # ``ensure_ascii=False`` keeps non-ASCII text compact and still valid JSON.
-    return (json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n").encode(
-        "utf-8"
-    )
+    return (json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
 
 
 def hello_ack(daemon_version: str, pid: int, claude_version: str | None) -> dict[str, Any]:
@@ -70,6 +68,7 @@ def error_frame(
 # Inbound parsing.
 # ---------------------------------------------------------------------------
 
+
 def parse_line(line: bytes, *, max_bytes: int = DEFAULT_MAX_LINE_BYTES) -> dict[str, Any]:
     """Parse a single wire line; raises :class:`ProtocolError` on bad input."""
     if len(line) > max_bytes:
@@ -95,6 +94,7 @@ def parse_line(line: bytes, *, max_bytes: int = DEFAULT_MAX_LINE_BYTES) -> dict[
 # ---------------------------------------------------------------------------
 # Typed control-message dataclasses.
 # ---------------------------------------------------------------------------
+
 
 @dataclasses.dataclass(slots=True)
 class HelloMessage:
@@ -238,9 +238,7 @@ def parse_open(obj: dict[str, Any]) -> OpenMessage:
     # would break the event multiplexing.
     for field in obj.keys():
         if field in FIXED_FLAG_FIELDS:
-            raise ProtocolError(
-                f"{field!r} is not client-settable; daemon always uses stream-json"
-            )
+            raise ProtocolError(f"{field!r} is not client-settable; daemon always uses stream-json")
 
     # Refuse unsafe CLI literals accidentally smuggled through free-form fields.
     for literal in UNSAFE_LITERAL_FLAGS:
@@ -281,9 +279,7 @@ def parse_user(obj: dict[str, Any]) -> UserMessage:
         raise ProtocolError("user requires 'session'")
     message = obj.get("message")
     if not isinstance(message, dict):
-        raise ProtocolError(
-            "user requires 'message' object (pass-through to claude stream-json)"
-        )
+        raise ProtocolError("user requires 'message' object (pass-through to claude stream-json)")
     role = message.get("role")
     if role != "user":
         raise ProtocolError("message.role must be 'user'")
@@ -347,6 +343,7 @@ def parse_unwatch(obj: dict[str, Any]) -> UnwatchMessage:
 # ---------------------------------------------------------------------------
 # Open → argv mapping (spec §5.4 / §6.1).
 # ---------------------------------------------------------------------------
+
 
 def build_claude_argv(
     claude_bin: str,

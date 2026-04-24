@@ -9,10 +9,8 @@ Run with::
 from __future__ import annotations
 
 import asyncio
-import os
 import shutil
 import uuid
-from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -21,7 +19,6 @@ from blemees import PROTOCOL_VERSION
 from blemees.config import Config
 from blemees.daemon import Daemon
 from blemees.logging import configure
-
 
 CLAUDE = shutil.which("claude")
 
@@ -51,12 +48,13 @@ async def real_daemon(tmp_path):
         daemon.request_shutdown()
         try:
             await asyncio.wait_for(serve_task, timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             serve_task.cancel()
 
 
 async def _client(socket_path: str):
     from tests.blemees.conftest import _StreamClient  # reuse helper
+
     reader, writer = await asyncio.open_unix_connection(socket_path)
     c = _StreamClient(reader, writer)
     await c.send({"type": "blemeesd.hello", "client": "e2e/0", "protocol": PROTOCOL_VERSION})
@@ -80,7 +78,13 @@ async def test_real_claude_turn_produces_result(real_daemon):
             }
         )
         await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
-        await c.send({"type": "claude.user", "session_id": session, "message": {"role": "user", "content": "Say OK."}})
+        await c.send(
+            {
+                "type": "claude.user",
+                "session_id": session,
+                "message": {"role": "user", "content": "Say OK."},
+            }
+        )
         res = await c.wait_for(
             lambda e: e.get("type") == "claude.result" and e.get("session_id") == session,
             timeout=60.0,
@@ -106,14 +110,25 @@ async def test_real_claude_resume_preserves_context(real_daemon):
         )
         await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
         await c.send(
-            {"type": "claude.user", "session_id": session, "message": {"role": "user", "content": "Remember the number 17."}}
+            {
+                "type": "claude.user",
+                "session_id": session,
+                "message": {"role": "user", "content": "Remember the number 17."},
+            }
         )
         await c.wait_for(
             lambda e: e.get("type") == "claude.result" and e.get("session_id") == session,
             timeout=60.0,
         )
         await c.send(
-            {"type": "claude.user", "session_id": session, "message": {"role": "user", "content": "What number did I ask you to remember? Answer with just the number."}}
+            {
+                "type": "claude.user",
+                "session_id": session,
+                "message": {
+                    "role": "user",
+                    "content": "What number did I ask you to remember? Answer with just the number.",
+                },
+            }
         )
         collected = await c.wait_for(
             lambda e: e.get("type") == "claude.result" and e.get("session_id") == session,
@@ -157,15 +172,17 @@ async def test_real_claude_interrupt_then_continue(real_daemon):
                 },
             }
         )
-        await c.wait_for(
-            lambda e: e.get("type") == "claude.stream_event", timeout=60.0
-        )
+        await c.wait_for(lambda e: e.get("type") == "claude.stream_event", timeout=60.0)
         await c.send({"type": "blemeesd.interrupt", "session_id": session})
-        await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.interrupted", timeout=10.0
-        )
+        await c.wait_for(lambda e: e.get("type") == "blemeesd.interrupted", timeout=10.0)
         # Subsequent turn still works.
-        await c.send({"type": "claude.user", "session_id": session, "message": {"role": "user", "content": "Say OK."}})
+        await c.send(
+            {
+                "type": "claude.user",
+                "session_id": session,
+                "message": {"role": "user", "content": "Say OK."},
+            }
+        )
         await c.wait_for(
             lambda e: e.get("type") == "claude.result" and e.get("session_id") == session,
             timeout=60.0,

@@ -11,8 +11,7 @@ import json
 import logging
 import sys
 import time
-from typing import Any, IO
-
+from typing import IO, Any
 
 LEVELS = {
     "debug": logging.DEBUG,
@@ -55,7 +54,7 @@ class StructuredLogger:
         self._logger = logger
         self._base = base
 
-    def bind(self, **fields: Any) -> "StructuredLogger":
+    def bind(self, **fields: Any) -> StructuredLogger:
         merged = dict(self._base)
         merged.update(fields)
         return StructuredLogger(self._logger, **merged)

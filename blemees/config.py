@@ -15,7 +15,6 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "blemeesd" / "config.toml"
 
 
@@ -111,8 +110,7 @@ def load(argv: list[str] | None = None) -> tuple[Config, bool]:
     file_values: dict[str, Any] = _load_toml(cfg_path)
     env_values = _env_overrides()
     cli_values = {
-        k: v for k, v in vars(args).items()
-        if k not in {"config_path", "version"} and v is not None
+        k: v for k, v in vars(args).items() if k not in {"config_path", "version"} and v is not None
     }
 
     merged: dict[str, Any] = {}

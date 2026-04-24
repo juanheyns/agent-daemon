@@ -32,6 +32,7 @@ dev = [
     "pytest>=7",
     "pytest-asyncio>=0.23",
     "jsonschema>=4.20",
+    "ruff>=0.6",
 ]
 
 [tool.setuptools]
@@ -43,3 +44,26 @@ asyncio_mode = "auto"
 markers = [
     "requires_claude: needs a real `claude` binary authenticated in the test environment",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["tests/blemees/fake_claude.py"]
+
+[tool.ruff.lint]
+# Keep the starter set conservative so adoption doesn't snowball into a big
+# rewrite. Pycodestyle + pyflakes + isort + pyupgrade + bugbear covers the
+# real-money defects (unused imports, undefined names, mutable defaults,
+# unordered imports) without fighting the existing style.
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",   # line length handled by formatter
+    "B008",   # default-arg callable is fine in our config/defaults
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]     # assert False is OK in tests
+"blemees/subprocess.py" = ["A005"]  # stdlib shadowing intentional
+
+[tool.ruff.format]
+quote-style = "double"

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 
 from blemees.errors import SessionExistsError, SessionUnknownError
@@ -54,6 +52,7 @@ async def test_reap_idle_removes_expired_only():
     await table.detach_soft("a")
     # Backdate detachment so the reaper considers it expired.
     import time
+
     table.get("a").detached_at = time.monotonic() - 2.0
     expired = await table.reap_idle()
     assert expired == ["a"]
@@ -63,9 +62,15 @@ async def test_reap_idle_removes_expired_only():
 
 async def test_detach_all_for_connection():
     table = SessionTable(idle_timeout_s=60, max_concurrent=8)
-    await table.register(Session(session_id="a", open_msg=_open_msg("a"), cwd=None, connection_id=1))
-    await table.register(Session(session_id="b", open_msg=_open_msg("b"), cwd=None, connection_id=1))
-    await table.register(Session(session_id="c", open_msg=_open_msg("c"), cwd=None, connection_id=2))
+    await table.register(
+        Session(session_id="a", open_msg=_open_msg("a"), cwd=None, connection_id=1)
+    )
+    await table.register(
+        Session(session_id="b", open_msg=_open_msg("b"), cwd=None, connection_id=1)
+    )
+    await table.register(
+        Session(session_id="c", open_msg=_open_msg("c"), cwd=None, connection_id=2)
+    )
     detached = await table.detach_all_for_connection(1)
     assert set(detached) == {"a", "b"}
     assert table.get("a").connection_id is None

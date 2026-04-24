@@ -21,17 +21,16 @@ import json
 import signal
 import time
 from collections import deque
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from .errors import (
     CLAUDE_CRASHED,
     OAUTH_EXPIRED,
-    SPAWN_FAILED,
     SessionBusyError,
     SpawnFailedError,
 )
-
 
 # Signatures that indicate the CLI's OAuth token has expired. Spec §9.2.
 _OAUTH_PATTERNS = (
@@ -76,7 +75,7 @@ class ClaudeSubprocess:
         logger,
         stderr_rate_lines: int = 50,
         stderr_rate_window_s: float = 10.0,
-        on_exit: Callable[["ClaudeSubprocess"], Awaitable[None]] | None = None,
+        on_exit: Callable[[ClaudeSubprocess], Awaitable[None]] | None = None,
     ) -> None:
         self.session_id = session_id
         self._argv = argv
@@ -165,14 +164,14 @@ class ClaudeSubprocess:
             return
         try:
             await asyncio.wait_for(self.proc.wait(), timeout=grace_ms / 1000.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             try:
                 self.proc.kill()
             except ProcessLookupError:
                 pass
             try:
                 await asyncio.wait_for(self.proc.wait(), timeout=1.0)
-            except asyncio.TimeoutError:  # pragma: no cover - defensive
+            except TimeoutError:  # pragma: no cover - defensive
                 self._log.error("subprocess.kill_failed")
 
     async def interrupt(self) -> bool:
@@ -209,7 +208,7 @@ class ClaudeSubprocess:
         try:
             await asyncio.wait_for(self.proc.wait(), timeout=timeout)
             return True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return False
 
     async def _drain_readers(self) -> None:
@@ -217,7 +216,7 @@ class ClaudeSubprocess:
             if not task.done():
                 try:
                     await asyncio.wait_for(task, timeout=2.0)
-                except asyncio.TimeoutError:  # pragma: no cover - defensive
+                except TimeoutError:  # pragma: no cover - defensive
                     task.cancel()
         self._reader_tasks = []
 
@@ -259,10 +258,7 @@ class ClaudeSubprocess:
             # ambiguity. Daemon-originated frames (e.g. the subprocess's own
             # ``blemeesd.stderr`` / ``blemeesd.error``) are emitted with their
             # prefix already set and are left alone.
-            if (
-                isinstance(orig_type, str)
-                and not orig_type.startswith(("blemeesd.", "claude."))
-            ):
+            if isinstance(orig_type, str) and not orig_type.startswith(("blemeesd.", "claude.")):
                 event["type"] = f"claude.{orig_type}"
             await self._enqueue(event)
 

@@ -18,10 +18,10 @@ Readers (reattaching connections) get a point-in-time snapshot.
 from __future__ import annotations
 
 import json
-import os
 from collections import deque
+from collections.abc import Iterable
 from pathlib import Path
-from typing import IO, Iterable
+from typing import IO
 
 
 class RingBuffer:

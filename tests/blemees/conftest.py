@@ -6,9 +6,8 @@ import asyncio
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -17,7 +16,6 @@ from blemees import PROTOCOL_VERSION
 from blemees.config import Config
 from blemees.daemon import Daemon
 from blemees.logging import configure
-
 
 FAKE_CLAUDE = Path(__file__).parent / "fake_claude.py"
 
@@ -40,6 +38,7 @@ def argv_trace_path(tmp_path):
 def fake_mode(monkeypatch):
     def _set(mode: str) -> None:
         monkeypatch.setenv("BLEMEES_FAKE_MODE", mode)
+
     return _set
 
 
@@ -81,7 +80,7 @@ async def daemon_and_socket(tmp_path, argv_trace_path, monkeypatch, request):
         daemon.request_shutdown()
         try:
             await asyncio.wait_for(serve_task, timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             serve_task.cancel()
 
 
@@ -126,9 +125,7 @@ class _StreamClient:
         while True:
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
-                raise asyncio.TimeoutError(
-                    f"predicate never matched; saw={collected}"
-                )
+                raise TimeoutError(f"predicate never matched; saw={collected}")
             evt = await self.recv(timeout=remaining)
             collected.append(evt)
             if predicate(evt):
@@ -158,9 +155,7 @@ async def client_factory(daemon_and_socket):
     async def make() -> _StreamClient:
         reader, writer = await asyncio.open_unix_connection(socket_path)
         c = _StreamClient(reader, writer)
-        await c.send(
-            {"type": "blemeesd.hello", "client": "test/0", "protocol": PROTOCOL_VERSION}
-        )
+        await c.send({"type": "blemeesd.hello", "client": "test/0", "protocol": PROTOCOL_VERSION})
         ack = await c.recv()
         assert ack["type"] == "blemeesd.hello_ack", ack
         created.append(c)

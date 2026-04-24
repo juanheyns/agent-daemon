@@ -6,7 +6,6 @@ See spec §5.10 for the complete table.
 
 from __future__ import annotations
 
-
 # Error codes (see spec §5.10).
 PROTOCOL_MISMATCH = "protocol_mismatch"
 INVALID_MESSAGE = "invalid_message"

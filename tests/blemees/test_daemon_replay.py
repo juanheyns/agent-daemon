@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import sys
 from pathlib import Path
 
 import pytest
@@ -16,14 +14,15 @@ from blemees.config import Config
 from blemees.daemon import Daemon
 from blemees.logging import configure
 
-
 FAKE_CLAUDE = str(Path(__file__).parent / "fake_claude.py")
 
 
 pytestmark = pytest.mark.asyncio
 
 
-def _make_config(tmp_path: Path, *, event_log_dir: Path | None = None, ring_buffer_size: int = 1024) -> Config:
+def _make_config(
+    tmp_path: Path, *, event_log_dir: Path | None = None, ring_buffer_size: int = 1024
+) -> Config:
     return Config(
         socket_path=str(tmp_path / "blemeesd.sock"),
         claude_bin=FAKE_CLAUDE,
@@ -57,7 +56,7 @@ async def custom_daemon(tmp_path, monkeypatch, request):
         daemon.request_shutdown()
         try:
             await asyncio.wait_for(serve_task, timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             serve_task.cancel()
 
 
@@ -92,7 +91,7 @@ class _Stream:
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise asyncio.TimeoutError("predicate never matched")
+                raise TimeoutError("predicate never matched")
             evt = await self.recv(timeout=remaining)
             if pred(evt):
                 return evt
@@ -109,9 +108,7 @@ class _Stream:
 async def _connect(socket_path: str) -> _Stream:
     reader, writer = await asyncio.open_unix_connection(socket_path)
     s = _Stream(reader, writer)
-    await s.send(
-        {"type": "blemeesd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION}
-    )
+    await s.send({"type": "blemeesd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION})
     ack = await s.recv()
     assert ack["type"] == "blemeesd.hello_ack"
     return s
@@ -121,16 +118,21 @@ async def _connect(socket_path: str) -> _Stream:
 # Option 1: events carry seq and land in the ring buffer
 # ---------------------------------------------------------------------------
 
+
 async def test_outbound_events_carry_monotonic_seq(custom_daemon):
     _daemon, cfg = custom_daemon
     s = await _connect(cfg.socket_path)
     try:
-        await s.send(
-            {"type": "blemeesd.open", "id": "r1", "session_id": "s1", "tools": ""}
-        )
+        await s.send({"type": "blemeesd.open", "id": "r1", "session_id": "s1", "tools": ""})
         opened = await s.wait_for(lambda e: e["type"] == "blemeesd.opened")
         assert opened["last_seq"] == 0
-        await s.send({"type": "claude.user", "session_id": "s1", "message": {"role": "user", "content": "hi"}})
+        await s.send(
+            {
+                "type": "claude.user",
+                "session_id": "s1",
+                "message": {"role": "user", "content": "hi"},
+            }
+        )
         seqs: list[int] = []
         while True:
             evt = await s.recv(timeout=5.0)
@@ -141,7 +143,9 @@ async def test_outbound_events_carry_monotonic_seq(custom_daemon):
                 break
         assert seqs == sorted(seqs)
         assert seqs == list(range(seqs[0], seqs[0] + len(seqs)))
-        assert len(seqs) >= 3  # claude.system + claude.stream_event + claude.assistant + claude.result
+        assert (
+            len(seqs) >= 3
+        )  # claude.system + claude.stream_event + claude.assistant + claude.result
     finally:
         await s.close()
 
@@ -149,6 +153,7 @@ async def test_outbound_events_carry_monotonic_seq(custom_daemon):
 # ---------------------------------------------------------------------------
 # Option 2: reconnect with last_seen_seq replays missed frames
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "custom_daemon",
@@ -162,7 +167,9 @@ async def test_reconnect_replays_from_last_seen_seq(custom_daemon):
     s1 = await _connect(cfg.socket_path)
     await s1.send({"type": "blemeesd.open", "id": "r1", "session_id": "rep", "tools": ""})
     await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
-    await s1.send({"type": "claude.user", "session_id": "rep", "message": {"role": "user", "content": "hi"}})
+    await s1.send(
+        {"type": "claude.user", "session_id": "rep", "message": {"role": "user", "content": "hi"}}
+    )
     first_seen: list[dict] = []
     while True:
         evt = await s1.recv(timeout=5.0)
@@ -194,7 +201,7 @@ async def test_reconnect_replays_from_last_seen_seq(custom_daemon):
         while True:
             try:
                 evt = await s2.recv(timeout=0.3)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
             seq = evt.get("seq")
             if isinstance(seq, int):
@@ -217,7 +224,9 @@ async def test_reconnect_emits_replay_gap_when_buffer_rolled_over(custom_daemon)
     s1 = await _connect(cfg.socket_path)
     await s1.send({"type": "blemeesd.open", "id": "r1", "session_id": "gap", "tools": ""})
     await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
-    await s1.send({"type": "claude.user", "session_id": "gap", "message": {"role": "user", "content": "hi"}})
+    await s1.send(
+        {"type": "claude.user", "session_id": "gap", "message": {"role": "user", "content": "hi"}}
+    )
     await s1.wait_for(lambda e: e.get("type") == "claude.result")
     await s1.close()
 
@@ -246,6 +255,7 @@ async def test_reconnect_emits_replay_gap_when_buffer_rolled_over(custom_daemon)
 # Option 1 again: mid-turn disconnect lets the subprocess run to completion
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "custom_daemon",
     [{"fake_mode": "normal"}],
@@ -258,7 +268,9 @@ async def test_mid_turn_disconnect_preserves_events_for_replay(custom_daemon):
     s1 = await _connect(cfg.socket_path)
     await s1.send({"type": "blemeesd.open", "id": "r1", "session_id": "mid", "tools": ""})
     await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
-    await s1.send({"type": "claude.user", "session_id": "mid", "message": {"role": "user", "content": "hi"}})
+    await s1.send(
+        {"type": "claude.user", "session_id": "mid", "message": {"role": "user", "content": "hi"}}
+    )
     await s1.wait_for(lambda e: e.get("type") == "claude.stream_event")
     # Drop without reading further.
     await s1.close()
@@ -285,7 +297,7 @@ async def test_mid_turn_disconnect_preserves_events_for_replay(custom_daemon):
         while True:
             try:
                 evt = await s2.recv(timeout=0.3)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
             if evt.get("type") == "claude.result" and evt.get("session_id") == "mid":
                 saw_result = True
@@ -297,6 +309,7 @@ async def test_mid_turn_disconnect_preserves_events_for_replay(custom_daemon):
 # ---------------------------------------------------------------------------
 # Option 3: durable log survives daemon restart
 # ---------------------------------------------------------------------------
+
 
 async def test_event_log_survives_restart(tmp_path, monkeypatch):
     monkeypatch.setenv("BLEMEES_FAKE_MODE", "normal")
@@ -313,7 +326,13 @@ async def test_event_log_survives_restart(tmp_path, monkeypatch):
         s = await _connect(cfg.socket_path)
         await s.send({"type": "blemeesd.open", "id": "r1", "session_id": "dur", "tools": ""})
         await s.wait_for(lambda e: e["type"] == "blemeesd.opened")
-        await s.send({"type": "claude.user", "session_id": "dur", "message": {"role": "user", "content": "hi"}})
+        await s.send(
+            {
+                "type": "claude.user",
+                "session_id": "dur",
+                "message": {"role": "user", "content": "hi"},
+            }
+        )
         await s.wait_for(lambda e: e.get("type") == "claude.result")
         await s.close()
     finally:
@@ -324,7 +343,7 @@ async def test_event_log_survives_restart(tmp_path, monkeypatch):
     log_file = log_dir / "dur.jsonl"
     assert log_file.is_file()
     raw = log_file.read_text().strip().splitlines()
-    seqs = [json.loads(l).get("seq") for l in raw if l.strip()]
+    seqs = [json.loads(line).get("seq") for line in raw if line.strip()]
     assert seqs == sorted(seqs)
 
     # Second daemon starts fresh, sees the log, can replay into a new client.
@@ -352,7 +371,7 @@ async def test_event_log_survives_restart(tmp_path, monkeypatch):
         while True:
             try:
                 evt = await s.recv(timeout=0.3)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
             if isinstance(evt.get("seq"), int):
                 replayed += 1

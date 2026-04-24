@@ -22,17 +22,16 @@ reconnect and catch up across disconnects or daemon restarts.
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 from .errors import SessionExistsError, SessionUnknownError
 from .event_log import DurableEventLog, RingBuffer, event_log_path
 from .protocol import OpenMessage
 from .subprocess import ClaudeSubprocess, session_file_path
-
 
 WriterFn = Callable[[dict], Awaitable[None]]
 
@@ -42,15 +41,15 @@ class Session:
     session_id: str
     open_msg: OpenMessage
     cwd: str | None
-    connection_id: Optional[int] = None
-    subprocess: Optional[ClaudeSubprocess] = None
-    detached_at: Optional[float] = None
+    connection_id: int | None = None
+    subprocess: ClaudeSubprocess | None = None
+    detached_at: float | None = None
 
     # Event-stream state -------------------------------------------------
     seq: int = 0
     ring: RingBuffer = field(default_factory=lambda: RingBuffer(1024))
-    log: Optional[DurableEventLog] = None
-    _writer: Optional[WriterFn] = None
+    log: DurableEventLog | None = None
+    _writer: WriterFn | None = None
     _finishing: bool = False  # subprocess keeps running, kill on next result
 
     # Non-driving subscribers: connection_id → writer. Watchers receive every
@@ -104,9 +103,7 @@ class Session:
             self._finishing = False
             sub = self.subprocess
             if sub is not None:
-                asyncio.create_task(
-                    sub.close(), name=f"cc-soft-kill-{self.session_id}"
-                )
+                asyncio.create_task(sub.close(), name=f"cc-soft-kill-{self.session_id}")
 
     # ------------------------------------------------------------------
     # Attach / detach
@@ -300,9 +297,7 @@ class SessionTable:
         return [
             s
             for s in self._sessions.values()
-            if s.subprocess is not None
-            and s.subprocess.running
-            and s.subprocess.turn_active
+            if s.subprocess is not None and s.subprocess.running and s.subprocess.turn_active
         ]
 
     # ------------------------------------------------------------------

@@ -11,11 +11,9 @@ from pathlib import Path
 
 import pytest
 
-
 jsonschema = pytest.importorskip("jsonschema")
-from jsonschema import Draft202012Validator
-from referencing import Registry, Resource
-
+from jsonschema import Draft202012Validator  # noqa: E402  (gated by importorskip)
+from referencing import Registry, Resource  # noqa: E402
 
 SCHEMAS_DIR = Path(__file__).resolve().parents[2] / "schemas"
 
@@ -38,6 +36,7 @@ def _registry(store: dict[str, dict]) -> Registry:
 # Meta-validation
 # ---------------------------------------------------------------------------
 
+
 def test_every_schema_parses_and_declares_id_and_schema():
     for path in SCHEMAS_DIR.rglob("*.json"):
         obj = json.loads(path.read_text())
@@ -55,6 +54,7 @@ def test_every_schema_is_valid_against_draft_2020_12_metaschema():
 # ---------------------------------------------------------------------------
 # Example-frame validation (inbound + outbound).
 # ---------------------------------------------------------------------------
+
 
 def _validate(store, registry, schema_id: str, frame: dict) -> None:
     schema = store[schema_id]

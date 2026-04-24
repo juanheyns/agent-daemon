@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import os
 import shutil
 import signal
@@ -18,30 +17,30 @@ import stat
 import subprocess as _stdlib_subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from . import PROTOCOL_VERSION, __version__
 from .config import Config
 from .errors import (
-    CcsockError,
     DAEMON_SHUTDOWN,
     INTERNAL,
     INVALID_MESSAGE,
     OVERSIZE_MESSAGE,
     PROTOCOL_MISMATCH,
-    SLOW_CONSUMER,
-    SPAWN_FAILED,
     SESSION_BUSY,
     SESSION_UNKNOWN,
+    SLOW_CONSUMER,
+    SPAWN_FAILED,
     UNKNOWN_MESSAGE,
     UNSAFE_FLAG,
+    CcsockError,
     OversizeMessageError,
     ProtocolError,
-    SpawnFailedError,
     SessionBusyError,
     SessionExistsError,
-    SessionUnknownError,
+    SpawnFailedError,
     UnsafeFlagError,
 )
 from .logging import StructuredLogger
@@ -62,9 +61,8 @@ from .protocol import (
     parse_user,
     parse_watch,
 )
-from .session import Session, SessionTable, make_reaper
+from .session import SessionTable, make_reaper
 from .subprocess import ClaudeSubprocess, list_session_files
-
 
 # Reserved `blemeesd.*` types that the daemon explicitly refuses with
 # ``unknown_message`` (Appendix B). All four originally-reserved verbs
@@ -121,8 +119,8 @@ class Connection:
         logger: StructuredLogger,
         claude_version: str | None,
         shutdown_event: asyncio.Event,
-        lookup_connection: "Callable[[int], Connection | None] | None" = None,
-        status_snapshot: "Callable[[], dict[str, Any]] | None" = None,
+        lookup_connection: Callable[[int], Connection | None] | None = None,
+        status_snapshot: Callable[[], dict[str, Any]] | None = None,
     ) -> None:
         self.id = self._next_id()
         self._reader = reader
@@ -279,9 +277,7 @@ class Connection:
             elif msg_type == "blemeesd.unwatch":
                 await self._handle_unwatch(parse_unwatch(obj))
             elif msg_type == "blemeesd.hello":
-                await self._emit_error(
-                    INVALID_MESSAGE, "duplicate hello", id=obj.get("id")
-                )
+                await self._emit_error(INVALID_MESSAGE, "duplicate hello", id=obj.get("id"))
             else:
                 await self._emit_error(
                     UNKNOWN_MESSAGE,
@@ -293,7 +289,9 @@ class Connection:
         except ProtocolError as exc:
             await self._emit_error(INVALID_MESSAGE, exc.message, id=obj.get("id"))
         except CcsockError as exc:
-            await self._emit_error(exc.code, exc.message, id=obj.get("id"), session_id=obj.get("session_id"))
+            await self._emit_error(
+                exc.code, exc.message, id=obj.get("id"), session_id=obj.get("session_id")
+            )
         except Exception as exc:  # pragma: no cover - defensive
             self._log.exception("dispatch.internal_error", type=msg_type)
             await self._emit_error(INTERNAL, f"internal error: {exc}")
@@ -319,9 +317,7 @@ class Connection:
                 ):
                     prev = self._lookup_connection(prev_id)
                     if prev is not None:
-                        await prev.notify_session_taken(
-                            msg.session_id, by_peer_pid=self._peer_pid
-                        )
+                        await prev.notify_session_taken(msg.session_id, by_peer_pid=self._peer_pid)
                 existing.open_msg = msg  # refresh flags on reattach
                 sess = existing
             else:
@@ -375,9 +371,7 @@ class Connection:
         replay = await sess.attach(
             self.id,
             self._enqueue_to_writer,
-            last_seen_seq=(
-                msg.last_seen_seq if msg.last_seen_seq is not None else 0
-            ),
+            last_seen_seq=(msg.last_seen_seq if msg.last_seen_seq is not None else 0),
         )
         self._log.info(
             "session.open",
@@ -391,9 +385,7 @@ class Connection:
         sess = self._sessions.get(msg.session_id)
         if sess.subprocess is None or not sess.subprocess.running:
             # Respawn transparently (spec §9.1): "Next claude.user respawns via --resume"
-            new_argv = build_claude_argv(
-                self._config.claude_bin, sess.open_msg, for_resume=True
-            )
+            new_argv = build_claude_argv(self._config.claude_bin, sess.open_msg, for_resume=True)
             proc = ClaudeSubprocess(
                 session_id=sess.session_id,
                 argv=new_argv,
@@ -406,9 +398,7 @@ class Connection:
             try:
                 await proc.spawn()
             except SpawnFailedError as exc:
-                await self._emit_error(
-                    SPAWN_FAILED, exc.message, session_id=msg.session_id
-                )
+                await self._emit_error(SPAWN_FAILED, exc.message, session_id=msg.session_id)
                 return
             sess.subprocess = proc
 
@@ -443,21 +433,15 @@ class Connection:
 
     async def _handle_list_sessions(self, msg) -> None:
         on_disk = list_session_files(msg.cwd)
-        merged: dict[str, dict] = {
-            row["session_id"]: {**row, "attached": False} for row in on_disk
-        }
+        merged: dict[str, dict] = {row["session_id"]: {**row, "attached": False} for row in on_disk}
         # Overlay in-memory sessions for the same cwd. Transcripts can lag
         # the first turn, so a session with no file yet still shows up.
         for sess in self._sessions.iter_by_cwd(msg.cwd):
             rec = merged.get(sess.session_id) or {"session_id": sess.session_id}
             rec["attached"] = sess.connection_id is not None
             merged[sess.session_id] = rec
-        sessions = sorted(
-            merged.values(), key=lambda r: r.get("mtime_ms") or 0, reverse=True
-        )
-        self._log.info(
-            "session.list", cwd=msg.cwd, count=len(sessions)
-        )
+        sessions = sorted(merged.values(), key=lambda r: r.get("mtime_ms") or 0, reverse=True)
+        self._log.info("session.list", cwd=msg.cwd, count=len(sessions))
         await self._emit_frame(
             {
                 "type": "blemeesd.sessions",
@@ -468,9 +452,7 @@ class Connection:
         )
 
     async def _handle_close(self, msg) -> None:
-        self._log.info(
-            "session.close", session_id=msg.session_id, delete=msg.delete
-        )
+        self._log.info("session.close", session_id=msg.session_id, delete=msg.delete)
         self._owned_sessions.discard(msg.session_id)
         await self._sessions.remove(msg.session_id, delete_file=msg.delete)
         await self._emit_frame(
@@ -496,9 +478,7 @@ class Connection:
         time — it has visibility the per-connection handler does not (e.g.
         total connection count, daemon uptime).
         """
-        snap: dict[str, Any] = (
-            self._status_snapshot() if self._status_snapshot is not None else {}
-        )
+        snap: dict[str, Any] = self._status_snapshot() if self._status_snapshot is not None else {}
         frame = {"type": "blemeesd.status_reply", "id": obj.get("id"), **snap}
         await self._emit_frame(frame)
 
@@ -632,10 +612,9 @@ class Connection:
             return
         if sys.platform == "linux":
             try:
-                data = sock.getsockopt(
-                    socket.SOL_SOCKET, socket.SO_PEERCRED, 4 * 3
-                )
+                data = sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 4 * 3)
                 import struct
+
                 pid, uid, _gid = struct.unpack("3i", data)
                 self._peer_pid, self._peer_uid = pid, uid
             except OSError:
@@ -645,6 +624,7 @@ class Connection:
                 LOCAL_PEERCRED = 0x001
                 data = sock.getsockopt(0, LOCAL_PEERCRED, 64)
                 import struct
+
                 # xucred layout starts with uint32 version then uint32 uid
                 _ver, uid = struct.unpack_from("II", data, 0)
                 self._peer_uid = uid
@@ -656,9 +636,7 @@ class Connection:
         await self._send_error_sync(DAEMON_SHUTDOWN, "daemon shutting down")
         self._alive = False
 
-    async def notify_session_taken(
-        self, session_id: str, *, by_peer_pid: int | None
-    ) -> None:
+    async def notify_session_taken(self, session_id: str, *, by_peer_pid: int | None) -> None:
         """Inform this connection that another connection has taken over a session.
 
         Emitted before the new owner is attached. The session is dropped from
@@ -670,9 +648,7 @@ class Connection:
         if by_peer_pid is not None:
             frame["by_peer_pid"] = by_peer_pid
         await self._emit_frame(frame)
-        self._log.info(
-            "session.taken_notified", session_id=session_id, by_peer_pid=by_peer_pid
-        )
+        self._log.info("session.taken_notified", session_id=session_id, by_peer_pid=by_peer_pid)
 
 
 # ---------------------------------------------------------------------------
@@ -715,9 +691,7 @@ class Daemon:
             version=__version__,
         )
 
-    async def _on_client(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _on_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         conn = Connection(
             reader,
             writer,
@@ -735,7 +709,7 @@ class Daemon:
         finally:
             self._connections.discard(conn)
 
-    def _lookup_connection(self, connection_id: int) -> "Connection | None":
+    def _lookup_connection(self, connection_id: int) -> Connection | None:
         for c in self._connections:
             if c.id == connection_id:
                 return c
@@ -816,17 +790,13 @@ class Daemon:
                     ),
                     timeout=grace,
                 )
-            except asyncio.TimeoutError:
-                self._log.warning(
-                    "daemon.shutdown_grace_expired", still_running=len(active)
-                )
+            except TimeoutError:
+                self._log.warning("daemon.shutdown_grace_expired", still_running=len(active))
 
         # Force phase: kill anything still alive.
         try:
-            await asyncio.wait_for(
-                self._sessions.shutdown(), timeout=_SHUTDOWN_BUDGET_S
-            )
-        except asyncio.TimeoutError:
+            await asyncio.wait_for(self._sessions.shutdown(), timeout=_SHUTDOWN_BUDGET_S)
+        except TimeoutError:
             self._log.warning("daemon.shutdown_timeout")
 
         if self._reaper_task is not None:

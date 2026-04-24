@@ -18,11 +18,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import time
 import uuid
 
-from . import PROTOCOL_VERSION
 from .client import BlemeesClient, default_socket_path
 
 

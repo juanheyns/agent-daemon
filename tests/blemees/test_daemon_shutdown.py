@@ -5,18 +5,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import time
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 
 from blemees import PROTOCOL_VERSION
 from blemees.config import Config
 from blemees.daemon import Daemon
 from blemees.logging import configure
-
 
 FAKE_CLAUDE = str(Path(__file__).parent / "fake_claude.py")
 
@@ -64,7 +61,7 @@ class _Stream:
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise asyncio.TimeoutError
+                raise TimeoutError
             evt = await self.recv(timeout=remaining)
             if pred(evt):
                 return evt
@@ -81,9 +78,7 @@ class _Stream:
 async def _connect(path: str) -> _Stream:
     r, w = await asyncio.open_unix_connection(path)
     s = _Stream(r, w)
-    await s.send(
-        {"type": "blemeesd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION}
-    )
+    await s.send({"type": "blemeesd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION})
     await s.recv()
     return s
 
@@ -99,6 +94,7 @@ async def _start_daemon(cfg: Config) -> tuple[Daemon, asyncio.Task]:
 # Graceful path: subprocess finishes during the grace period.
 # ---------------------------------------------------------------------------
 
+
 async def test_shutdown_waits_for_in_flight_turn(tmp_path, monkeypatch):
     monkeypatch.setenv("BLEMEES_FAKE_MODE", "finish")
     monkeypatch.setenv("BLEMEES_FAKE_FINISH_DELAY_S", "0.4")
@@ -107,9 +103,7 @@ async def test_shutdown_waits_for_in_flight_turn(tmp_path, monkeypatch):
     try:
         s = await _connect(cfg.socket_path)
         try:
-            await s.send(
-                {"type": "blemeesd.open", "id": "r1", "session_id": "g", "tools": ""}
-            )
+            await s.send({"type": "blemeesd.open", "id": "r1", "session_id": "g", "tools": ""})
             await s.wait_for(lambda e: e.get("type") == "blemeesd.opened")
             await s.send(
                 {
@@ -141,6 +135,7 @@ async def test_shutdown_waits_for_in_flight_turn(tmp_path, monkeypatch):
 # Expiry path: subprocess never finishes; grace expires; force-kill.
 # ---------------------------------------------------------------------------
 
+
 async def test_shutdown_force_kills_when_grace_expires(tmp_path, monkeypatch):
     monkeypatch.setenv("BLEMEES_FAKE_MODE", "slow")
     cfg = _config(tmp_path, grace_s=1)
@@ -148,9 +143,7 @@ async def test_shutdown_force_kills_when_grace_expires(tmp_path, monkeypatch):
     try:
         s = await _connect(cfg.socket_path)
         try:
-            await s.send(
-                {"type": "blemeesd.open", "id": "r1", "session_id": "slow", "tools": ""}
-            )
+            await s.send({"type": "blemeesd.open", "id": "r1", "session_id": "slow", "tools": ""})
             await s.wait_for(lambda e: e.get("type") == "blemeesd.opened")
             await s.send(
                 {
@@ -179,6 +172,7 @@ async def test_shutdown_force_kills_when_grace_expires(tmp_path, monkeypatch):
 # Zero grace: no wait, immediate SIGTERM (legacy v0.1 behaviour).
 # ---------------------------------------------------------------------------
 
+
 async def test_shutdown_grace_zero_kills_immediately(tmp_path, monkeypatch):
     monkeypatch.setenv("BLEMEES_FAKE_MODE", "slow")
     cfg = _config(tmp_path, grace_s=0)
@@ -186,9 +180,7 @@ async def test_shutdown_grace_zero_kills_immediately(tmp_path, monkeypatch):
     try:
         s = await _connect(cfg.socket_path)
         try:
-            await s.send(
-                {"type": "blemeesd.open", "id": "r1", "session_id": "z", "tools": ""}
-            )
+            await s.send({"type": "blemeesd.open", "id": "r1", "session_id": "z", "tools": ""})
             await s.wait_for(lambda e: e.get("type") == "blemeesd.opened")
             await s.send(
                 {
@@ -216,6 +208,7 @@ async def test_shutdown_grace_zero_kills_immediately(tmp_path, monkeypatch):
 # Idle sessions (no turn in flight) are torn down immediately even at high grace.
 # ---------------------------------------------------------------------------
 
+
 async def test_shutdown_skips_wait_for_idle_sessions(tmp_path, monkeypatch):
     monkeypatch.setenv("BLEMEES_FAKE_MODE", "normal")
     cfg = _config(tmp_path, grace_s=30)
@@ -223,9 +216,7 @@ async def test_shutdown_skips_wait_for_idle_sessions(tmp_path, monkeypatch):
     try:
         s = await _connect(cfg.socket_path)
         try:
-            await s.send(
-                {"type": "blemeesd.open", "id": "r1", "session_id": "idle", "tools": ""}
-            )
+            await s.send({"type": "blemeesd.open", "id": "r1", "session_id": "idle", "tools": ""})
             await s.wait_for(lambda e: e.get("type") == "blemeesd.opened")
             # No user turn sent; session is idle.
             t0 = time.monotonic()

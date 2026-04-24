@@ -16,8 +16,9 @@ import asyncio
 import contextlib
 import json
 import os
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 from . import PROTOCOL_VERSION
 
@@ -36,7 +37,7 @@ class BlemeesClientError(RuntimeError):
 
 
 class Session:
-    def __init__(self, client: "BlemeesClient", session_id: str) -> None:
+    def __init__(self, client: BlemeesClient, session_id: str) -> None:
         self._client = client
         self.session_id = session_id
         self._queue: asyncio.Queue = asyncio.Queue()
@@ -103,12 +104,16 @@ class BlemeesClient:
         self.daemon_info: dict[str, Any] = {}
 
     @classmethod
-    async def connect(cls, socket_path: str | None = None) -> "BlemeesClient":
+    async def connect(cls, socket_path: str | None = None) -> BlemeesClient:
         path = socket_path or default_socket_path()
         reader, writer = await asyncio.open_unix_connection(path)
         client = cls(reader, writer)
         await client._send(
-            {"type": "blemeesd.hello", "client": "blemees-reference/0.1", "protocol": PROTOCOL_VERSION}
+            {
+                "type": "blemeesd.hello",
+                "client": "blemees-reference/0.1",
+                "protocol": PROTOCOL_VERSION,
+            }
         )
         ack = await client._read_one()
         if ack.get("type") != "blemeesd.hello_ack":
@@ -117,7 +122,7 @@ class BlemeesClient:
         client._reader_task = asyncio.create_task(client._reader_loop())
         return client
 
-    async def __aenter__(self) -> "BlemeesClient":
+    async def __aenter__(self) -> BlemeesClient:
         return self
 
     async def __aexit__(self, *_exc: Any) -> None:
@@ -134,9 +139,7 @@ class BlemeesClient:
         req_id = f"req_{self._next_req}"
         fut: asyncio.Future = asyncio.get_running_loop().create_future()
         self._pending[req_id] = fut
-        await self._send(
-            {"type": "blemeesd.list_sessions", "id": req_id, "cwd": cwd}
-        )
+        await self._send({"type": "blemeesd.list_sessions", "id": req_id, "cwd": cwd})
         reply = await fut
         if reply.get("type") == "blemeesd.error":
             raise BlemeesClientError(reply.get("code", ""), reply.get("message", ""))
@@ -150,7 +153,9 @@ class BlemeesClient:
         self._pending[req_id] = fut
         sess = Session(self, session_id)
         self._sessions[session_id] = sess
-        await self._send({"type": "blemeesd.open", "id": req_id, "session_id": session_id, **fields})
+        await self._send(
+            {"type": "blemeesd.open", "id": req_id, "session_id": session_id, **fields}
+        )
         reply = await fut
         if reply.get("type") == "blemeesd.error":
             self._sessions.pop(session_id, None)

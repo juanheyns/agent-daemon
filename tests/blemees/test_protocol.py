@@ -28,10 +28,10 @@ from blemees.protocol import (
     parse_user,
 )
 
-
 # ---------------------------------------------------------------------------
 # Framing / encode / decode
 # ---------------------------------------------------------------------------
+
 
 def test_encode_is_newline_terminated_utf8():
     data = encode({"type": "blemeesd.hello", "emoji": "🌟"})
@@ -73,9 +73,9 @@ def test_parse_line_rejects_oversize():
 
 def test_parse_line_handles_surrogate_pairs():
     # Emoji encoded as two UTF-16 surrogates must round-trip via JSON.
-    raw = json.dumps({"type": "x", "text": "\U0001F600"}).encode("utf-8") + b"\n"
+    raw = json.dumps({"type": "x", "text": "\U0001f600"}).encode("utf-8") + b"\n"
     obj = parse_line(raw)
-    assert obj["text"] == "\U0001F600"
+    assert obj["text"] == "\U0001f600"
 
 
 def test_parse_line_allows_embedded_nul_in_json_string():
@@ -87,6 +87,7 @@ def test_parse_line_allows_embedded_nul_in_json_string():
 # ---------------------------------------------------------------------------
 # hello / hello_ack
 # ---------------------------------------------------------------------------
+
 
 def test_parse_hello_requires_protocol():
     with pytest.raises(ProtocolError):
@@ -111,6 +112,7 @@ def test_hello_ack_shape():
 # ---------------------------------------------------------------------------
 # open
 # ---------------------------------------------------------------------------
+
 
 def test_parse_open_requires_session():
     with pytest.raises(ProtocolError):
@@ -277,6 +279,7 @@ def test_build_argv_unset_fields_omit_flags():
 # user / interrupt / close
 # ---------------------------------------------------------------------------
 
+
 def test_parse_user_message_string_content():
     u = parse_user(
         {
@@ -371,6 +374,7 @@ def test_parse_close_delete_true():
 # list_sessions
 # ---------------------------------------------------------------------------
 
+
 def test_parse_list_sessions_requires_cwd():
     with pytest.raises(ProtocolError):
         parse_list_sessions({"type": "blemeesd.list_sessions"})
@@ -382,9 +386,7 @@ def test_parse_list_sessions_rejects_non_string_cwd():
 
 
 def test_parse_list_sessions_ok():
-    msg = parse_list_sessions(
-        {"type": "blemeesd.list_sessions", "id": "r1", "cwd": "/home/u/proj"}
-    )
+    msg = parse_list_sessions({"type": "blemeesd.list_sessions", "id": "r1", "cwd": "/home/u/proj"})
     assert msg.cwd == "/home/u/proj"
     assert msg.id == "r1"
 
@@ -392,6 +394,7 @@ def test_parse_list_sessions_ok():
 # ---------------------------------------------------------------------------
 # error_frame
 # ---------------------------------------------------------------------------
+
 
 def test_error_frame_includes_optional_fields():
     frame = error_frame("invalid_message", "oops", id="req_1", session_id="s1")

@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from pathlib import Path
-
-import pytest
 
 from blemees.event_log import DurableEventLog, RingBuffer, event_log_path
 from blemees.protocol import OpenMessage
 from blemees.session import Session
 
-
 # ---------------------------------------------------------------------------
 # RingBuffer
 # ---------------------------------------------------------------------------
+
 
 def test_ring_buffer_drops_oldest():
     ring = RingBuffer(3)
@@ -38,6 +34,7 @@ def test_ring_buffer_since_filters_inclusive_boundary():
 # DurableEventLog
 # ---------------------------------------------------------------------------
 
+
 def test_durable_log_roundtrips(tmp_path):
     log = DurableEventLog(tmp_path / "sess.jsonl")
     log.open()
@@ -49,9 +46,7 @@ def test_durable_log_roundtrips(tmp_path):
 
 def test_durable_log_tail_skips_malformed(tmp_path):
     path = tmp_path / "s.jsonl"
-    path.write_text(
-        '{"seq":1,"type":"x"}\nnot-json\n{"seq":2,"type":"y"}\n', encoding="utf-8"
-    )
+    path.write_text('{"seq":1,"type":"x"}\nnot-json\n{"seq":2,"type":"y"}\n', encoding="utf-8")
     log = DurableEventLog(path)
     assert [r["seq"] for r in log.tail(10)] == [1, 2]
 
@@ -74,6 +69,7 @@ def test_event_log_path_joins():
 # ---------------------------------------------------------------------------
 # Session event dispatch
 # ---------------------------------------------------------------------------
+
 
 def _open_msg(session: str = "s1") -> OpenMessage:
     return OpenMessage(id=None, session_id=session, resume=False, fields={"session_id": session})

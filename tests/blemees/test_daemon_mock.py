@@ -16,7 +16,6 @@ import pytest
 
 from blemees import PROTOCOL_VERSION
 
-
 pytestmark = pytest.mark.asyncio
 
 
@@ -25,9 +24,7 @@ async def test_hello_roundtrip(daemon_and_socket):
     reader, writer = await asyncio.open_unix_connection(path)
     writer.write(
         (
-            json.dumps(
-                {"type": "blemeesd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION}
-            )
+            json.dumps({"type": "blemeesd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION})
             + "\n"
         ).encode()
     )
@@ -42,9 +39,7 @@ async def test_hello_roundtrip(daemon_and_socket):
 async def test_protocol_mismatch_closes_connection(daemon_and_socket):
     _daemon, path = daemon_and_socket
     reader, writer = await asyncio.open_unix_connection(path)
-    writer.write(
-        (json.dumps({"type": "blemeesd.hello", "protocol": "blemees/99"}) + "\n").encode()
-    )
+    writer.write((json.dumps({"type": "blemeesd.hello", "protocol": "blemees/99"}) + "\n").encode())
     await writer.drain()
     err = json.loads((await reader.readuntil(b"\n")).decode())
     assert err["type"] == "blemeesd.error"
@@ -54,12 +49,12 @@ async def test_protocol_mismatch_closes_connection(daemon_and_socket):
 async def test_open_then_user_then_result(client_factory, fake_mode):
     fake_mode("normal")
     client = await client_factory()
-    await client.send(
-        {"type": "blemeesd.open", "id": "r1", "session_id": "s1", "tools": ""}
-    )
+    await client.send({"type": "blemeesd.open", "id": "r1", "session_id": "s1", "tools": ""})
     opened = await client.wait_for(lambda e: e["type"] == "blemeesd.opened")
     assert opened["session_id"] == "s1"
-    await client.send({"type": "claude.user", "session_id": "s1", "message": {"role": "user", "content": "hello"}})
+    await client.send(
+        {"type": "claude.user", "session_id": "s1", "message": {"role": "user", "content": "hello"}}
+    )
     result = await client.wait_for(
         lambda e: e.get("type") == "claude.result" and e.get("session_id") == "s1"
     )
@@ -95,9 +90,7 @@ async def test_ping_replies_with_pong(client_factory):
     assert pong["data"] == 42
 
 
-async def test_session_flag_mapping_in_argv(
-    client_factory, fake_mode, argv_trace_path
-):
+async def test_session_flag_mapping_in_argv(client_factory, fake_mode, argv_trace_path):
     fake_mode("normal")
     client = await client_factory()
     await client.send(
@@ -126,9 +119,7 @@ async def test_session_flag_mapping_in_argv(
     assert "--verbose" in argv
 
 
-async def test_resume_flag_used_when_requested(
-    client_factory, fake_mode, argv_trace_path
-):
+async def test_resume_flag_used_when_requested(client_factory, fake_mode, argv_trace_path):
     fake_mode("normal")
     client = await client_factory()
     await client.send(
@@ -152,11 +143,11 @@ async def test_interrupt_respawns_with_resume(
 ):
     fake_mode("slow")
     client = await client_factory()
-    await client.send(
-        {"type": "blemeesd.open", "id": "r1", "session_id": "s-int", "tools": ""}
-    )
+    await client.send({"type": "blemeesd.open", "id": "r1", "session_id": "s-int", "tools": ""})
     await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
-    await client.send({"type": "claude.user", "session_id": "s-int", "message": {"role": "user", "content": "go"}})
+    await client.send(
+        {"type": "claude.user", "session_id": "s-int", "message": {"role": "user", "content": "go"}}
+    )
     # Wait until streaming starts.
     await client.wait_for(lambda e: e.get("type") == "claude.stream_event")
     await client.send({"type": "blemeesd.interrupt", "session_id": "s-int"})
@@ -207,16 +198,18 @@ async def test_concurrent_sessions_dont_interfere(client_factory, fake_mode):
     assert set(saw) == {"a", "b", "c"}
 
 
-async def test_crash_mid_turn_then_recover(
-    client_factory, fake_mode, monkeypatch
-):
+async def test_crash_mid_turn_then_recover(client_factory, fake_mode, monkeypatch):
     fake_mode("crash")
     client = await client_factory()
-    await client.send(
-        {"type": "blemeesd.open", "id": "r1", "session_id": "s-crash", "tools": ""}
-    )
+    await client.send({"type": "blemeesd.open", "id": "r1", "session_id": "s-crash", "tools": ""})
     await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
-    await client.send({"type": "claude.user", "session_id": "s-crash", "message": {"role": "user", "content": "boom"}})
+    await client.send(
+        {
+            "type": "claude.user",
+            "session_id": "s-crash",
+            "message": {"role": "user", "content": "boom"},
+        }
+    )
     err = await client.wait_for(
         lambda e: e.get("type") == "blemeesd.error" and e.get("code") == "claude_crashed"
     )
@@ -224,7 +217,13 @@ async def test_crash_mid_turn_then_recover(
 
     # Next user message should transparently respawn (spec §9.1).
     fake_mode("normal")
-    await client.send({"type": "claude.user", "session_id": "s-crash", "message": {"role": "user", "content": "again"}})
+    await client.send(
+        {
+            "type": "claude.user",
+            "session_id": "s-crash",
+            "message": {"role": "user", "content": "again"},
+        }
+    )
     await client.wait_for(
         lambda e: e.get("type") == "claude.result" and e.get("session_id") == "s-crash"
     )
@@ -233,9 +232,7 @@ async def test_crash_mid_turn_then_recover(
 async def test_close_removes_session(client_factory, fake_mode):
     fake_mode("normal")
     client = await client_factory()
-    await client.send(
-        {"type": "blemeesd.open", "id": "r1", "session_id": "s-close", "tools": ""}
-    )
+    await client.send({"type": "blemeesd.open", "id": "r1", "session_id": "s-close", "tools": ""})
     await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
     await client.send(
         {"type": "blemeesd.close", "id": "r2", "session_id": "s-close", "delete": False}
@@ -244,18 +241,14 @@ async def test_close_removes_session(client_factory, fake_mode):
     assert closed["session_id"] == "s-close"
 
     # Re-open without resume should succeed since session is gone.
-    await client.send(
-        {"type": "blemeesd.open", "id": "r3", "session_id": "s-close", "tools": ""}
-    )
+    await client.send({"type": "blemeesd.open", "id": "r3", "session_id": "s-close", "tools": ""})
     await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
 
 
 async def test_detach_allows_reattach_via_resume(client_factory, fake_mode):
     fake_mode("normal")
     c1 = await client_factory()
-    await c1.send(
-        {"type": "blemeesd.open", "id": "r1", "session_id": "s-det", "tools": ""}
-    )
+    await c1.send({"type": "blemeesd.open", "id": "r1", "session_id": "s-det", "tools": ""})
     await c1.wait_for(lambda e: e.get("type") == "blemeesd.opened")
     await c1.close()
 
@@ -289,10 +282,12 @@ async def test_invalid_message_keeps_connection_alive(client_factory):
 # list_sessions
 # ---------------------------------------------------------------------------
 
+
 def _seed_transcript(
     home_dir: Path, cwd: str, session_id: str, preview: str | None, mtime: int
 ) -> Path:
     from blemees.subprocess import project_dir_for_cwd as _pdfc
+
     # Recompute project dir against the fake $HOME so the test matches the
     # runtime encoding.
     old_home = os.environ.get("HOME")
@@ -331,9 +326,7 @@ async def test_list_sessions_requires_cwd(client_factory):
 async def test_list_sessions_empty_for_unknown_cwd(client_factory, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     client = await client_factory()
-    await client.send(
-        {"type": "blemeesd.list_sessions", "id": "r1", "cwd": "/nope/nope"}
-    )
+    await client.send({"type": "blemeesd.list_sessions", "id": "r1", "cwd": "/nope/nope"})
     reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
     assert reply["id"] == "r1"
     assert reply["cwd"] == "/nope/nope"
@@ -356,9 +349,7 @@ async def test_list_sessions_returns_sorted_on_disk(client_factory, tmp_path, mo
     assert reply["sessions"][0]["mtime_ms"] == 1_700_000_100_000
 
 
-async def test_list_sessions_flags_attached(
-    client_factory, fake_mode, tmp_path, monkeypatch
-):
+async def test_list_sessions_flags_attached(client_factory, fake_mode, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     fake_mode("normal")
     cwd = str(tmp_path)  # any unique, existing dir
@@ -385,6 +376,7 @@ async def test_list_sessions_flags_attached(
 # Session takeover
 # ---------------------------------------------------------------------------
 
+
 async def test_takeover_notifies_previous_owner(client_factory, fake_mode):
     fake_mode("normal")
     a = await client_factory()
@@ -406,8 +398,7 @@ async def test_takeover_notifies_previous_owner(client_factory, fake_mode):
 
     # A must see the notification.
     notice = await a.wait_for(
-        lambda e: e.get("type") == "blemeesd.session_taken"
-        and e.get("session_id") == "shared"
+        lambda e: e.get("type") == "blemeesd.session_taken" and e.get("session_id") == "shared"
     )
     # Informational peer_pid may be absent in tests (no SO_PEERCRED capture
     # for in-process unix sockets on some kernels), but the frame must arrive.
@@ -422,14 +413,10 @@ async def test_takeover_notifies_previous_owner(client_factory, fake_mode):
             "message": {"role": "user", "content": "hi"},
         }
     )
-    await b.wait_for(
-        lambda e: e.get("type") == "claude.result" and e.get("session_id") == "shared"
-    )
+    await b.wait_for(lambda e: e.get("type") == "claude.result" and e.get("session_id") == "shared")
 
 
-async def test_no_takeover_notice_for_same_connection_reopen(
-    client_factory, fake_mode
-):
+async def test_no_takeover_notice_for_same_connection_reopen(client_factory, fake_mode):
     fake_mode("normal")
     c = await client_factory()
     await c.send({"type": "blemeesd.open", "id": "r1", "session_id": "self", "tools": ""})
@@ -456,6 +443,7 @@ async def test_no_takeover_notice_for_same_connection_reopen(
 # ---------------------------------------------------------------------------
 # status
 # ---------------------------------------------------------------------------
+
 
 async def test_status_returns_snapshot(client_factory, fake_mode):
     fake_mode("normal")
@@ -493,6 +481,7 @@ async def test_status_reflects_open_sessions(client_factory, fake_mode):
 # ---------------------------------------------------------------------------
 # watch / unwatch
 # ---------------------------------------------------------------------------
+
 
 async def test_watch_receives_events_live(client_factory, fake_mode):
     fake_mode("normal")
@@ -572,15 +561,13 @@ async def test_unwatch_stops_delivery(client_factory, fake_mode):
             "message": {"role": "user", "content": "go"},
         }
     )
-    await owner.wait_for(
-        lambda e: e.get("type") == "claude.result" and e.get("session_id") == "u"
-    )
+    await owner.wait_for(lambda e: e.get("type") == "claude.result" and e.get("session_id") == "u")
     # Give event propagation a beat, then confirm the watcher queue is idle.
     await asyncio.sleep(0.1)
     try:
         evt = await watcher.recv(timeout=0.2)
         assert evt.get("type") != "claude.result", f"unexpected frame {evt}"
-    except asyncio.TimeoutError:
+    except TimeoutError:
         pass
 
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sys
 from pathlib import Path
 
 import pytest
@@ -18,7 +17,6 @@ from blemees.subprocess import (
     list_session_files,
     project_dir_for_cwd,
 )
-
 
 FAKE_CLAUDE = str(Path(__file__).parent / "fake_claude.py")
 
@@ -72,7 +70,7 @@ async def test_normal_turn_produces_result(monkeypatch):
     await proc.spawn()
     try:
         assert proc.running is True
-        line = build_user_stdin_line("s1", message={"role":"user","content":"hi"})
+        line = build_user_stdin_line("s1", message={"role": "user", "content": "hi"})
         await proc.send_user_line(line)
         events = await _drain_until_result(queue, "s1")
         kinds = [e["type"] for e in events]
@@ -99,7 +97,9 @@ async def test_session_busy_while_turn_in_flight(monkeypatch):
     )
     await proc.spawn()
     try:
-        await proc.send_user_line(build_user_stdin_line("s1", message={"role":"user","content":"go"}))
+        await proc.send_user_line(
+            build_user_stdin_line("s1", message={"role": "user", "content": "go"})
+        )
         # Wait for at least one delta so we know the turn is live.
         while True:
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -107,7 +107,7 @@ async def test_session_busy_while_turn_in_flight(monkeypatch):
                 break
         with pytest.raises(SessionBusyError):
             await proc.send_user_line(
-                build_user_stdin_line("s1", message={"role":"user","content":"again"})
+                build_user_stdin_line("s1", message={"role": "user", "content": "again"})
             )
     finally:
         await proc.close()
@@ -126,7 +126,9 @@ async def test_interrupt_kills_and_respawns_with_resume(monkeypatch):
     )
     await proc.spawn()
     try:
-        await proc.send_user_line(build_user_stdin_line("s1", message={"role":"user","content":"go"}))
+        await proc.send_user_line(
+            build_user_stdin_line("s1", message={"role": "user", "content": "go"})
+        )
         # Wait for streaming to start.
         while True:
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -178,7 +180,9 @@ async def test_crash_surfaces_claude_crashed(monkeypatch):
     )
     await proc.spawn()
     try:
-        await proc.send_user_line(build_user_stdin_line("s1", message={"role":"user","content":"boom"}))
+        await proc.send_user_line(
+            build_user_stdin_line("s1", message={"role": "user", "content": "boom"})
+        )
         saw_error = False
         for _ in range(20):
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -253,6 +257,7 @@ def test_list_session_files_reads_metadata_and_preview(tmp_path, monkeypatch):
 
     # Touch files to set deterministic mtimes: bbb newer than aaa.
     import os
+
     os.utime(project_dir / "aaa.jsonl", (1_700_000_000, 1_700_000_000))
     os.utime(project_dir / "bbb.jsonl", (1_700_000_100, 1_700_000_100))
 
