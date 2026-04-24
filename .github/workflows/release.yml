@@ -1,0 +1,65 @@
+name: Release
+
+# Triggered by pushing a tag like v0.1.0. Builds sdist + wheel, attaches
+# them to a GitHub Release, and (optionally) publishes to PyPI via Trusted
+# Publishers. Enable PyPI publishing by configuring a trusted publisher at
+# https://pypi.org/manage/account/publishing/ and then flipping the
+# `publish-pypi` job's `if:` guard below.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write  # needed for the GitHub Release upload.
+
+jobs:
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  gh-release:
+    name: Attach to GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+  publish-pypi:
+    name: Publish to PyPI (Trusted Publishers)
+    needs: build
+    # Flip this guard to `true` after you configure a PyPI trusted publisher
+    # for this repository. Until then the job no-ops so pushing a tag doesn't
+    # require PyPI credentials.
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/blemees
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
