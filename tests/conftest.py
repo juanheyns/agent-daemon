@@ -15,9 +15,7 @@ try:
     def _expr_selects_requires_claude(markexpr: str) -> bool:
         """Return True only when the expression would select a test carrying
         *solely* the ``requires_claude`` marker (i.e. a genuine opt-in)."""
-        return _MarkExpression.compile(markexpr).evaluate(
-            lambda name: name == "requires_claude"
-        )
+        return _MarkExpression.compile(markexpr).evaluate(lambda name: name == "requires_claude")
 
 except Exception:  # pragma: no cover — old pytest / import failure
 
