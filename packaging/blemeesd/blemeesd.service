@@ -1,5 +1,5 @@
 [Unit]
-Description=Headless Agent daemon
+Description=Headless agent daemon
 After=default.target
 
 [Service]
