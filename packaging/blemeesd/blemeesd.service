@@ -3,7 +3,7 @@ Description=Headless Claude Code daemon
 After=default.target
 
 [Service]
-ExecStart=%h/.local/bin/ccsockd
+ExecStart=%h/.local/bin/blemeesd
 Restart=on-failure
 RestartSec=2s
 

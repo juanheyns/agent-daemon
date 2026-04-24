@@ -1,6 +1,6 @@
-"""Typed exceptions and error codes for ccsockd.
+"""Typed exceptions and error codes for blemeesd.
 
-Each error-code string appears in a `ccsockd.error` frame's `code` field.
+Each error-code string appears in a `blemeesd.error` frame's `code` field.
 See spec §5.10 for the complete table.
 """
 

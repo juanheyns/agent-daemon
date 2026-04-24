@@ -1,12 +1,12 @@
-"""Reference Python client for ccsockd (Appendix A; stdlib only).
+"""Reference Python client for blemeesd (Appendix A; stdlib only).
 
 Usage::
 
-    async with CcsockClient.connect() as c:
+    async with BlemeesClient.connect() as c:
         async with c.open_session(session="s1", model="sonnet", tools="") as s:
             await s.send_user("hi")
             async for evt in s.events():
-                if evt.get("type") == "result":
+                if evt.get("type") == "claude.result":
                     break
 """
 
@@ -25,18 +25,18 @@ from . import PROTOCOL_VERSION
 def default_socket_path() -> str:
     xdg = os.environ.get("XDG_RUNTIME_DIR")
     if xdg:
-        return str(Path(xdg) / "ccsockd.sock")
-    return f"/tmp/ccsockd-{os.getuid()}.sock"
+        return str(Path(xdg) / "blemeesd.sock")
+    return f"/tmp/blemeesd-{os.getuid()}.sock"
 
 
-class CcsockClientError(RuntimeError):
+class BlemeesClientError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
 
 
 class Session:
-    def __init__(self, client: "CcsockClient", session_id: str) -> None:
+    def __init__(self, client: "BlemeesClient", session_id: str) -> None:
         self._client = client
         self.session_id = session_id
         self._queue: asyncio.Queue = asyncio.Queue()
@@ -44,7 +44,7 @@ class Session:
         self.last_seq: int = 0  # highest seq observed; pass into open(resume)
 
     async def send_user(self, text: str | None = None, *, content: list | None = None) -> None:
-        frame: dict[str, Any] = {"type": "ccsockd.user", "session": self.session_id}
+        frame: dict[str, Any] = {"type": "blemeesd.user", "session": self.session_id}
         if content is not None:
             frame["content"] = content
         else:
@@ -52,14 +52,14 @@ class Session:
         await self._client._send(frame)
 
     async def interrupt(self) -> None:
-        await self._client._send({"type": "ccsockd.interrupt", "session": self.session_id})
+        await self._client._send({"type": "blemeesd.interrupt", "session": self.session_id})
 
     async def close(self, *, delete: bool = False) -> None:
         if self._closed:
             return
         self._closed = True
         await self._client._send(
-            {"type": "ccsockd.close", "session": self.session_id, "delete": delete}
+            {"type": "blemeesd.close", "session": self.session_id, "delete": delete}
         )
 
     async def events(self) -> AsyncIterator[dict[str, Any]]:
@@ -79,7 +79,7 @@ class Session:
         self._queue.put_nowait(None)
 
 
-class CcsockClient:
+class BlemeesClient:
     def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self._reader = reader
         self._writer = writer
@@ -91,21 +91,21 @@ class CcsockClient:
         self.daemon_info: dict[str, Any] = {}
 
     @classmethod
-    async def connect(cls, socket_path: str | None = None) -> "CcsockClient":
+    async def connect(cls, socket_path: str | None = None) -> "BlemeesClient":
         path = socket_path or default_socket_path()
         reader, writer = await asyncio.open_unix_connection(path)
         client = cls(reader, writer)
         await client._send(
-            {"type": "ccsockd.hello", "client": "ccsock-reference/0.1", "protocol": PROTOCOL_VERSION}
+            {"type": "blemeesd.hello", "client": "blemees-reference/0.1", "protocol": PROTOCOL_VERSION}
         )
         ack = await client._read_one()
-        if ack.get("type") != "ccsockd.hello_ack":
-            raise CcsockClientError(ack.get("code", "protocol"), ack.get("message", str(ack)))
+        if ack.get("type") != "blemeesd.hello_ack":
+            raise BlemeesClientError(ack.get("code", "protocol"), ack.get("message", str(ack)))
         client.daemon_info = ack
         client._reader_task = asyncio.create_task(client._reader_loop())
         return client
 
-    async def __aenter__(self) -> "CcsockClient":
+    async def __aenter__(self) -> "BlemeesClient":
         return self
 
     async def __aexit__(self, *_exc: Any) -> None:
@@ -123,11 +123,11 @@ class CcsockClient:
         fut: asyncio.Future = asyncio.get_running_loop().create_future()
         self._pending[req_id] = fut
         await self._send(
-            {"type": "ccsockd.list_sessions", "id": req_id, "cwd": cwd}
+            {"type": "blemeesd.list_sessions", "id": req_id, "cwd": cwd}
         )
         reply = await fut
-        if reply.get("type") == "ccsockd.error":
-            raise CcsockClientError(reply.get("code", ""), reply.get("message", ""))
+        if reply.get("type") == "blemeesd.error":
+            raise BlemeesClientError(reply.get("code", ""), reply.get("message", ""))
         return list(reply.get("sessions", []))
 
     @contextlib.asynccontextmanager
@@ -138,11 +138,11 @@ class CcsockClient:
         self._pending[req_id] = fut
         sess = Session(self, session)
         self._sessions[session] = sess
-        await self._send({"type": "ccsockd.open", "id": req_id, "session": session, **fields})
+        await self._send({"type": "blemeesd.open", "id": req_id, "session": session, **fields})
         reply = await fut
-        if reply.get("type") == "ccsockd.error":
+        if reply.get("type") == "blemeesd.error":
             self._sessions.pop(session, None)
-            raise CcsockClientError(reply.get("code", ""), reply.get("message", ""))
+            raise BlemeesClientError(reply.get("code", ""), reply.get("message", ""))
         try:
             yield sess
         finally:
@@ -183,10 +183,10 @@ class CcsockClient:
                     req_id
                     and msg_type
                     in {
-                        "ccsockd.opened",
-                        "ccsockd.closed",
-                        "ccsockd.sessions",
-                        "ccsockd.error",
+                        "blemeesd.opened",
+                        "blemeesd.closed",
+                        "blemeesd.sessions",
+                        "blemeesd.error",
                     }
                     and req_id in self._pending
                 ):
@@ -199,6 +199,6 @@ class CcsockClient:
         except (asyncio.IncompleteReadError, ConnectionError, OSError):
             for fut in self._pending.values():
                 if not fut.done():
-                    fut.set_exception(CcsockClientError("closed", "connection closed"))
+                    fut.set_exception(BlemeesClientError("closed", "connection closed"))
             for sess in self._sessions.values():
                 sess._terminate()

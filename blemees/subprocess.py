@@ -2,7 +2,7 @@
 
 Responsibilities:
     * Spawn and respawn (``--resume``) the child with a fixed argv template.
-    * Feed ``ccsockd.user`` turns to stdin.
+    * Feed ``blemeesd.user`` turns to stdin.
     * Parse stdout stream-json events; inject ``"session"`` and enqueue to the
       connection event queue.
     * Rate-limit stderr lines, detect OAuth-expiry signatures, surface
@@ -179,7 +179,7 @@ class ClaudeSubprocess:
         """Terminate an in-flight turn and respawn via ``--resume``.
 
         Returns ``False`` if there was no in-flight turn (caller should emit
-        ``ccsockd.interrupted`` with ``was_idle: true`` and skip the respawn).
+        ``blemeesd.interrupted`` with ``was_idle: true`` and skip the respawn).
         """
         if not self.turn_active:
             return False
@@ -235,8 +235,21 @@ class ClaudeSubprocess:
             if not isinstance(event, dict):
                 continue
             event["session"] = self.session_id
-            if event.get("type") == "result":
+            # Detect turn-end against the native CC type *before* namespacing
+            # it, so the check stays stable if we ever change the prefix.
+            orig_type = event.get("type")
+            if orig_type == "result":
                 self.turn_active = False
+            # Namespace CC native events under ``claude.*`` so clients can
+            # disambiguate them from ``blemeesd.*`` daemon frames without
+            # ambiguity. Daemon-originated frames (e.g. the subprocess's own
+            # ``blemeesd.stderr`` / ``blemeesd.error``) are emitted with their
+            # prefix already set and are left alone.
+            if (
+                isinstance(orig_type, str)
+                and not orig_type.startswith(("blemeesd.", "claude."))
+            ):
+                event["type"] = f"claude.{orig_type}"
             await self._enqueue(event)
 
     async def _read_stderr(self) -> None:
@@ -260,7 +273,7 @@ class ClaudeSubprocess:
                 self._oauth_emitted = True
                 await self._enqueue(
                     {
-                        "type": "ccsockd.error",
+                        "type": "blemeesd.error",
                         "session": self.session_id,
                         "code": OAUTH_EXPIRED,
                         "message": "Run `claude auth` to re-authenticate.",
@@ -271,7 +284,7 @@ class ClaudeSubprocess:
             if self._stderr_limit.allow():
                 await self._enqueue(
                     {
-                        "type": "ccsockd.stderr",
+                        "type": "blemeesd.stderr",
                         "session": self.session_id,
                         "line": line,
                     }
@@ -288,7 +301,7 @@ class ClaudeSubprocess:
             tail = " | ".join(self._stderr_tail) or f"exit {rc}"
             await self._enqueue(
                 {
-                    "type": "ccsockd.error",
+                    "type": "blemeesd.error",
                     "session": self.session_id,
                     "code": CLAUDE_CRASHED,
                     "message": f"stderr tail: {tail}"[:2048],

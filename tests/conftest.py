@@ -1,4 +1,4 @@
-"""Top-level pytest configuration for the ccsock tests.
+"""Top-level pytest configuration for the blemees tests.
 
 Auto-skip ``requires_claude``-marked tests unless the caller opts in with
 ``pytest -m requires_claude``. Matches spec §11.3: these run only against

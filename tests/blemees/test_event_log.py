@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from ccsock.event_log import DurableEventLog, RingBuffer, event_log_path
-from ccsock.protocol import OpenMessage
-from ccsock.session import Session
+from blemees.event_log import DurableEventLog, RingBuffer, event_log_path
+from blemees.protocol import OpenMessage
+from blemees.session import Session
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +123,7 @@ async def test_session_emits_replay_gap_when_ring_rolled_over():
         seen.append(frame)
 
     summary = await sess.attach(connection_id=3, writer=writer, last_seen_seq=2)
-    assert seen[0]["type"] == "ccsockd.replay_gap"
+    assert seen[0]["type"] == "blemeesd.replay_gap"
     assert seen[0]["first_available_seq"] == 8
     assert [f["seq"] for f in seen[1:]] == [8, 9, 10]
     assert summary["gap_from"] == 3 and summary["gap_to"] == 7
@@ -196,7 +196,7 @@ async def test_session_finishing_triggers_soft_kill_on_result():
     sess.subprocess = sub  # type: ignore[assignment]
     sess.mark_finishing()
 
-    await sess.on_event({"type": "result", "session": "s1", "subtype": "success"})
+    await sess.on_event({"type": "claude.result", "session": "s1", "subtype": "success"})
     # Give the scheduled close task a chance to run.
     await asyncio.sleep(0.01)
     assert sub.closed is True

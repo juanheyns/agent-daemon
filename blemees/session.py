@@ -1,11 +1,11 @@
-"""Session table for ccsockd (spec §3, §5.9, §6.5).
+"""Session table for blemeesd (spec §3, §5.9, §6.5).
 
 A :class:`Session` binds a session id to a :class:`ClaudeSubprocess`, the
 connection that currently owns it (if any), and the original :class:`OpenMessage`
 so we can respawn with ``--resume`` after an interrupt or reattach.
 
 Sessions outlive client connections. When a client disconnects without
-calling ``ccsockd.close``, the session is *detached*: if a turn is in
+calling ``blemeesd.close``, the session is *detached*: if a turn is in
 flight the subprocess is allowed to run to the next ``result`` event (so
 the transcript closes cleanly), otherwise it is terminated immediately.
 Either way, the session record is kept so another connection can
@@ -82,8 +82,9 @@ class Session:
                 # The writer's dead; treat as a silent detach. The session
                 # stays live so a future attach can still replay.
                 self._writer = None
-        # Soft-kill after a completed turn when the client has left.
-        if self._finishing and frame.get("type") == "result":
+        # Soft-kill after a completed turn when the client has left. We
+        # match on the namespaced form emitted by the subprocess reader.
+        if self._finishing and frame.get("type") == "claude.result":
             self._finishing = False
             sub = self.subprocess
             if sub is not None:
@@ -120,7 +121,7 @@ class Session:
             # We dropped frames with seq in (last_seen_seq, earliest).
             await writer(
                 {
-                    "type": "ccsockd.replay_gap",
+                    "type": "blemeesd.replay_gap",
                     "session": self.session_id,
                     "since_seq": last_seen_seq,
                     "first_available_seq": earliest,
@@ -132,7 +133,7 @@ class Session:
         elif not to_replay and self.seq > last_seen_seq:
             await writer(
                 {
-                    "type": "ccsockd.replay_gap",
+                    "type": "blemeesd.replay_gap",
                     "session": self.session_id,
                     "since_seq": last_seen_seq,
                     "first_available_seq": self.seq + 1,
@@ -323,4 +324,4 @@ def make_reaper(table: SessionTable, logger, *, interval_s: float = 30.0) -> asy
             except Exception:  # pragma: no cover - defensive
                 logger.exception("session.reaper_error")
 
-    return asyncio.create_task(_loop(), name="ccsock-reaper")
+    return asyncio.create_task(_loop(), name="blemees-reaper")

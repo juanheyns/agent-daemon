@@ -1,14 +1,14 @@
-"""Wire protocol codec for ccsockd (spec §5).
+"""Wire protocol codec for blemeesd (spec §5).
 
 Responsibilities:
     * Encode/decode newline-delimited JSON frames.
-    * Validate ``ccsockd.*`` control messages into typed dataclasses.
-    * Map `ccsockd.open` fields onto ``claude -p`` CLI flags.
+    * Validate ``blemeesd.*`` control messages into typed dataclasses.
+    * Map `blemeesd.open` fields onto ``claude -p`` CLI flags.
     * Reject unsafe flags.
 
 All dataclasses are immutable and carry only the fields required by the
 dispatcher. Unknown fields in inbound messages are tolerated (forward
-compatibility), but unrecognised ``ccsockd.*`` types raise.
+compatibility), but unrecognised ``blemeesd.*`` types raise.
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ def encode(obj: dict[str, Any]) -> bytes:
 
 def hello_ack(daemon_version: str, pid: int, claude_version: str | None) -> dict[str, Any]:
     return {
-        "type": "ccsockd.hello_ack",
-        "daemon": f"ccsockd/{daemon_version}",
+        "type": "blemeesd.hello_ack",
+        "daemon": f"blemeesd/{daemon_version}",
         "protocol": PROTOCOL_VERSION,
         "pid": pid,
         "claude_version": claude_version,
@@ -58,7 +58,7 @@ def error_frame(
     id: str | None = None,
     session: str | None = None,
 ) -> dict[str, Any]:
-    frame: dict[str, Any] = {"type": "ccsockd.error", "code": code, "message": message}
+    frame: dict[str, Any] = {"type": "blemeesd.error", "code": code, "message": message}
     if id is not None:
         frame["id"] = id
     if session is not None:

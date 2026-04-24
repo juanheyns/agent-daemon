@@ -11,10 +11,10 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
-from ccsock import PROTOCOL_VERSION
-from ccsock.config import Config
-from ccsock.daemon import Daemon
-from ccsock.logging import configure
+from blemees import PROTOCOL_VERSION
+from blemees.config import Config
+from blemees.daemon import Daemon
+from blemees.logging import configure
 
 
 FAKE_CLAUDE = str(Path(__file__).parent / "fake_claude.py")
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.asyncio
 
 def _make_config(tmp_path: Path, *, event_log_dir: Path | None = None, ring_buffer_size: int = 1024) -> Config:
     return Config(
-        socket_path=str(tmp_path / "ccsockd.sock"),
+        socket_path=str(tmp_path / "blemeesd.sock"),
         claude_bin=FAKE_CLAUDE,
         idle_timeout_s=60,
         max_concurrent_sessions=8,
@@ -37,7 +37,7 @@ def _make_config(tmp_path: Path, *, event_log_dir: Path | None = None, ring_buff
 @pytest_asyncio.fixture
 async def custom_daemon(tmp_path, monkeypatch, request):
     overrides = getattr(request, "param", None) or {}
-    monkeypatch.setenv("CCSOCK_FAKE_MODE", overrides.get("fake_mode", "normal"))
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", overrides.get("fake_mode", "normal"))
 
     event_log_dir = overrides.get("event_log_dir")
     if event_log_dir == "__tmp__":
@@ -110,10 +110,10 @@ async def _connect(socket_path: str) -> _Stream:
     reader, writer = await asyncio.open_unix_connection(socket_path)
     s = _Stream(reader, writer)
     await s.send(
-        {"type": "ccsockd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION}
+        {"type": "blemeesd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION}
     )
     ack = await s.recv()
-    assert ack["type"] == "ccsockd.hello_ack"
+    assert ack["type"] == "blemeesd.hello_ack"
     return s
 
 
@@ -126,22 +126,22 @@ async def test_outbound_events_carry_monotonic_seq(custom_daemon):
     s = await _connect(cfg.socket_path)
     try:
         await s.send(
-            {"type": "ccsockd.open", "id": "r1", "session": "s1", "tools": ""}
+            {"type": "blemeesd.open", "id": "r1", "session": "s1", "tools": ""}
         )
-        opened = await s.wait_for(lambda e: e["type"] == "ccsockd.opened")
+        opened = await s.wait_for(lambda e: e["type"] == "blemeesd.opened")
         assert opened["last_seq"] == 0
-        await s.send({"type": "ccsockd.user", "session": "s1", "text": "hi"})
+        await s.send({"type": "blemeesd.user", "session": "s1", "text": "hi"})
         seqs: list[int] = []
         while True:
             evt = await s.recv(timeout=5.0)
             seq = evt.get("seq")
             if isinstance(seq, int):
                 seqs.append(seq)
-            if evt.get("type") == "result":
+            if evt.get("type") == "claude.result":
                 break
         assert seqs == sorted(seqs)
         assert seqs == list(range(seqs[0], seqs[0] + len(seqs)))
-        assert len(seqs) >= 3  # system + stream_event + assistant + result
+        assert len(seqs) >= 3  # claude.system + claude.stream_event + claude.assistant + claude.result
     finally:
         await s.close()
 
@@ -160,14 +160,14 @@ async def test_reconnect_replays_from_last_seen_seq(custom_daemon):
 
     # First connection opens the session and sends a turn; collect all seqs.
     s1 = await _connect(cfg.socket_path)
-    await s1.send({"type": "ccsockd.open", "id": "r1", "session": "rep", "tools": ""})
-    await s1.wait_for(lambda e: e["type"] == "ccsockd.opened")
-    await s1.send({"type": "ccsockd.user", "session": "rep", "text": "hi"})
+    await s1.send({"type": "blemeesd.open", "id": "r1", "session": "rep", "tools": ""})
+    await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
+    await s1.send({"type": "blemeesd.user", "session": "rep", "text": "hi"})
     first_seen: list[dict] = []
     while True:
         evt = await s1.recv(timeout=5.0)
         first_seen.append(evt)
-        if evt.get("type") == "result":
+        if evt.get("type") == "claude.result":
             break
     await s1.close()
 
@@ -179,7 +179,7 @@ async def test_reconnect_replays_from_last_seen_seq(custom_daemon):
     try:
         await s2.send(
             {
-                "type": "ccsockd.open",
+                "type": "blemeesd.open",
                 "id": "r2",
                 "session": "rep",
                 "resume": True,
@@ -187,7 +187,7 @@ async def test_reconnect_replays_from_last_seen_seq(custom_daemon):
                 "last_seen_seq": mid_seq,
             }
         )
-        opened = await s2.wait_for(lambda e: e["type"] == "ccsockd.opened")
+        opened = await s2.wait_for(lambda e: e["type"] == "blemeesd.opened")
         assert opened["last_seq"] >= last_seq
         replayed: list[int] = []
         # Consume until we catch up (no more frames within 0.3s).
@@ -215,10 +215,10 @@ async def test_reconnect_emits_replay_gap_when_buffer_rolled_over(custom_daemon)
     _daemon, cfg = custom_daemon
 
     s1 = await _connect(cfg.socket_path)
-    await s1.send({"type": "ccsockd.open", "id": "r1", "session": "gap", "tools": ""})
-    await s1.wait_for(lambda e: e["type"] == "ccsockd.opened")
-    await s1.send({"type": "ccsockd.user", "session": "gap", "text": "hi"})
-    await s1.wait_for(lambda e: e.get("type") == "result")
+    await s1.send({"type": "blemeesd.open", "id": "r1", "session": "gap", "tools": ""})
+    await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
+    await s1.send({"type": "blemeesd.user", "session": "gap", "text": "hi"})
+    await s1.wait_for(lambda e: e.get("type") == "claude.result")
     await s1.close()
 
     # With a tiny ring, most of the turn's events are gone from memory.
@@ -226,7 +226,7 @@ async def test_reconnect_emits_replay_gap_when_buffer_rolled_over(custom_daemon)
     try:
         await s2.send(
             {
-                "type": "ccsockd.open",
+                "type": "blemeesd.open",
                 "id": "r2",
                 "session": "gap",
                 "resume": True,
@@ -234,8 +234,8 @@ async def test_reconnect_emits_replay_gap_when_buffer_rolled_over(custom_daemon)
                 "last_seen_seq": 1,
             }
         )
-        await s2.wait_for(lambda e: e["type"] == "ccsockd.opened")
-        gap = await s2.wait_for(lambda e: e.get("type") == "ccsockd.replay_gap")
+        await s2.wait_for(lambda e: e["type"] == "blemeesd.opened")
+        gap = await s2.wait_for(lambda e: e.get("type") == "blemeesd.replay_gap")
         assert gap["since_seq"] == 1
         assert gap["first_available_seq"] > 2
     finally:
@@ -256,10 +256,10 @@ async def test_mid_turn_disconnect_preserves_events_for_replay(custom_daemon):
 
     # Open + issue a turn, then drop the connection before reading all events.
     s1 = await _connect(cfg.socket_path)
-    await s1.send({"type": "ccsockd.open", "id": "r1", "session": "mid", "tools": ""})
-    await s1.wait_for(lambda e: e["type"] == "ccsockd.opened")
-    await s1.send({"type": "ccsockd.user", "session": "mid", "text": "hi"})
-    await s1.wait_for(lambda e: e.get("type") == "stream_event")
+    await s1.send({"type": "blemeesd.open", "id": "r1", "session": "mid", "tools": ""})
+    await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
+    await s1.send({"type": "blemeesd.user", "session": "mid", "text": "hi"})
+    await s1.wait_for(lambda e: e.get("type") == "claude.stream_event")
     # Drop without reading further.
     await s1.close()
 
@@ -272,7 +272,7 @@ async def test_mid_turn_disconnect_preserves_events_for_replay(custom_daemon):
     try:
         await s2.send(
             {
-                "type": "ccsockd.open",
+                "type": "blemeesd.open",
                 "id": "r2",
                 "session": "mid",
                 "resume": True,
@@ -280,14 +280,14 @@ async def test_mid_turn_disconnect_preserves_events_for_replay(custom_daemon):
                 "last_seen_seq": 0,
             }
         )
-        await s2.wait_for(lambda e: e["type"] == "ccsockd.opened")
+        await s2.wait_for(lambda e: e["type"] == "blemeesd.opened")
         saw_result = False
         while True:
             try:
                 evt = await s2.recv(timeout=0.3)
             except asyncio.TimeoutError:
                 break
-            if evt.get("type") == "result" and evt.get("session") == "mid":
+            if evt.get("type") == "claude.result" and evt.get("session") == "mid":
                 saw_result = True
         assert saw_result, "result must have been buffered while disconnected"
     finally:
@@ -299,7 +299,7 @@ async def test_mid_turn_disconnect_preserves_events_for_replay(custom_daemon):
 # ---------------------------------------------------------------------------
 
 async def test_event_log_survives_restart(tmp_path, monkeypatch):
-    monkeypatch.setenv("CCSOCK_FAKE_MODE", "normal")
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", "normal")
     log_dir = tmp_path / "event_log"
 
     cfg = _make_config(tmp_path, event_log_dir=log_dir)
@@ -311,10 +311,10 @@ async def test_event_log_survives_restart(tmp_path, monkeypatch):
     t1 = asyncio.create_task(d1.serve_forever())
     try:
         s = await _connect(cfg.socket_path)
-        await s.send({"type": "ccsockd.open", "id": "r1", "session": "dur", "tools": ""})
-        await s.wait_for(lambda e: e["type"] == "ccsockd.opened")
-        await s.send({"type": "ccsockd.user", "session": "dur", "text": "hi"})
-        await s.wait_for(lambda e: e.get("type") == "result")
+        await s.send({"type": "blemeesd.open", "id": "r1", "session": "dur", "tools": ""})
+        await s.wait_for(lambda e: e["type"] == "blemeesd.opened")
+        await s.send({"type": "blemeesd.user", "session": "dur", "text": "hi"})
+        await s.wait_for(lambda e: e.get("type") == "claude.result")
         await s.close()
     finally:
         d1.request_shutdown()
@@ -329,7 +329,7 @@ async def test_event_log_survives_restart(tmp_path, monkeypatch):
 
     # Second daemon starts fresh, sees the log, can replay into a new client.
     cfg2 = _make_config(tmp_path, event_log_dir=log_dir)
-    cfg2.socket_path = str(tmp_path / "ccsockd-2.sock")
+    cfg2.socket_path = str(tmp_path / "blemeesd-2.sock")
     d2 = Daemon(cfg2, logger)
     await d2.start()
     t2 = asyncio.create_task(d2.serve_forever())
@@ -337,7 +337,7 @@ async def test_event_log_survives_restart(tmp_path, monkeypatch):
         s = await _connect(cfg2.socket_path)
         await s.send(
             {
-                "type": "ccsockd.open",
+                "type": "blemeesd.open",
                 "id": "r1",
                 "session": "dur",
                 "resume": True,
@@ -345,7 +345,7 @@ async def test_event_log_survives_restart(tmp_path, monkeypatch):
                 "last_seen_seq": 0,
             }
         )
-        opened = await s.wait_for(lambda e: e["type"] == "ccsockd.opened")
+        opened = await s.wait_for(lambda e: e["type"] == "blemeesd.opened")
         # last_seq reflects the prior daemon's seq.
         assert opened["last_seq"] >= max(seqs)
         replayed = 0

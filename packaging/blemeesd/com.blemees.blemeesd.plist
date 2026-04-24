@@ -4,11 +4,11 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.ccsock.ccsockd</string>
+    <string>com.blemees.blemeesd</string>
 
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/ccsockd</string>
+        <string>/usr/local/bin/blemeesd</string>
     </array>
 
     <key>RunAtLoad</key>
@@ -24,9 +24,9 @@
     <integer>5</integer>
 
     <key>StandardErrorPath</key>
-    <string>/tmp/ccsockd.err.log</string>
+    <string>/tmp/blemeesd.err.log</string>
 
     <key>StandardOutPath</key>
-    <string>/tmp/ccsockd.out.log</string>
+    <string>/tmp/blemeesd.out.log</string>
 </dict>
 </plist>

@@ -64,16 +64,16 @@ from .session import Session, SessionTable, make_reaper
 from .subprocess import ClaudeSubprocess, list_session_files
 
 
-# Reserved `ccsockd.*` types that v0.1 explicitly refuses with
+# Reserved `blemeesd.*` types that v0.1 explicitly refuses with
 # ``unknown_message`` (Appendix B). ``list_sessions`` was reserved in the
 # original spec but unreserved here in v0.1.1 — clients need parity with
 # the interactive ``/resume`` discovery flow.
 _RESERVED_TYPES = frozenset(
     {
-        "ccsockd.ping",
-        "ccsockd.pong",
-        "ccsockd.status",
-        "ccsockd.watch",
+        "blemeesd.ping",
+        "blemeesd.pong",
+        "blemeesd.status",
+        "blemeesd.watch",
     }
 )
 
@@ -193,8 +193,8 @@ class Connection:
             return False
         try:
             obj = parse_line(raw, max_bytes=self._config.max_line_bytes)
-            if obj.get("type") != "ccsockd.hello":
-                raise ProtocolError("first frame must be ccsockd.hello")
+            if obj.get("type") != "blemeesd.hello":
+                raise ProtocolError("first frame must be blemeesd.hello")
             hello = parse_hello(obj)
         except OversizeMessageError as exc:
             await self._send_error_sync(OVERSIZE_MESSAGE, exc.message)
@@ -257,17 +257,17 @@ class Connection:
             )
             return
         try:
-            if msg_type == "ccsockd.open":
+            if msg_type == "blemeesd.open":
                 await self._handle_open(parse_open(obj))
-            elif msg_type == "ccsockd.user":
+            elif msg_type == "blemeesd.user":
                 await self._handle_user(parse_user(obj))
-            elif msg_type == "ccsockd.interrupt":
+            elif msg_type == "blemeesd.interrupt":
                 await self._handle_interrupt(parse_interrupt(obj))
-            elif msg_type == "ccsockd.close":
+            elif msg_type == "blemeesd.close":
                 await self._handle_close(parse_close(obj))
-            elif msg_type == "ccsockd.list_sessions":
+            elif msg_type == "blemeesd.list_sessions":
                 await self._handle_list_sessions(parse_list_sessions(obj))
-            elif msg_type == "ccsockd.hello":
+            elif msg_type == "blemeesd.hello":
                 await self._emit_error(
                     INVALID_MESSAGE, "duplicate hello", id=obj.get("id")
                 )
@@ -337,7 +337,7 @@ class Connection:
         # before they start consuming (possibly replayed) frames.
         await self._emit_frame(
             {
-                "type": "ccsockd.opened",
+                "type": "blemeesd.opened",
                 "id": msg.id,
                 "session": msg.session,
                 "subprocess_pid": sess.subprocess.pid,
@@ -366,7 +366,7 @@ class Connection:
     async def _handle_user(self, msg) -> None:
         sess = self._sessions.get(msg.session)
         if sess.subprocess is None or not sess.subprocess.running:
-            # Respawn transparently (spec §9.1): "Next ccsockd.user respawns via --resume"
+            # Respawn transparently (spec §9.1): "Next blemeesd.user respawns via --resume"
             new_argv = build_claude_argv(
                 self._config.claude_bin, sess.open_msg, for_resume=True
             )
@@ -401,7 +401,7 @@ class Connection:
         if sess is None or sess.subprocess is None:
             await self._emit_frame(
                 {
-                    "type": "ccsockd.interrupted",
+                    "type": "blemeesd.interrupted",
                     "session": msg.session,
                     "was_idle": True,
                 }
@@ -411,7 +411,7 @@ class Connection:
         did_kill = await sess.subprocess.interrupt()
         await self._emit_frame(
             {
-                "type": "ccsockd.interrupted",
+                "type": "blemeesd.interrupted",
                 "session": msg.session,
                 "was_idle": not did_kill,
             }
@@ -436,7 +436,7 @@ class Connection:
         )
         await self._emit_frame(
             {
-                "type": "ccsockd.sessions",
+                "type": "blemeesd.sessions",
                 "id": msg.id,
                 "cwd": msg.cwd,
                 "sessions": sessions,
@@ -450,7 +450,7 @@ class Connection:
         self._owned_sessions.discard(msg.session)
         await self._sessions.remove(msg.session, delete_file=msg.delete)
         await self._emit_frame(
-            {"type": "ccsockd.closed", "id": msg.id, "session": msg.session}
+            {"type": "blemeesd.closed", "id": msg.id, "session": msg.session}
         )
 
     # ------------------------------------------------------------------

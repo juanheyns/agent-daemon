@@ -1,8 +1,8 @@
-"""Latency benchmark for ccsockd (spec §11.4).
+"""Latency benchmark for blemeesd (spec §11.4).
 
 Run with::
 
-    python -m ccsock.bench [--socket PATH] [--model haiku] [--iters 3]
+    python -m blemees.bench [--socket PATH] [--model haiku] [--iters 3]
 
 Measures three numbers per the spec:
     * cold_first_event   — open + first event, fresh session
@@ -31,16 +31,21 @@ async def _first_event_latency(sess, prompt: str) -> float:
     await sess.send_user(prompt)
     async for evt in sess.events():
         t = evt.get("type")
-        if t == "ccsockd.error":
+        if t == "blemeesd.error":
             raise RuntimeError(evt)
-        if t in {"stream_event", "assistant", "partial_assistant", "result"}:
+        if t in {
+            "claude.stream_event",
+            "claude.assistant",
+            "claude.partial_assistant",
+            "claude.result",
+        }:
             return time.monotonic() - t0
     raise RuntimeError("stream ended without any event")
 
 
 async def _drain_to_result(sess) -> None:
     async for evt in sess.events():
-        if evt.get("type") == "result":
+        if evt.get("type") == "claude.result":
             return
 
 
@@ -95,7 +100,7 @@ async def main_async(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(prog="python -m ccsock.bench")
+    ap = argparse.ArgumentParser(prog="python -m blemees.bench")
     ap.add_argument("--socket", default=default_socket_path())
     ap.add_argument("--model", default="haiku")
     ap.add_argument("--iters", type=int, default=3)

@@ -1,4 +1,4 @@
-# ccsockd — Headless Claude Code Daemon
+# blemeesd — Headless Claude Code Daemon
 
 **Version:** 0.1 (draft, pre-implementation)
 **Status:** Ready for an implementing agent to build from zero.
@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-`ccsockd` is a per-user daemon that exposes the Claude Code CLI (`claude -p`)
+`blemeesd` is a per-user daemon that exposes the Claude Code CLI (`claude -p`)
 as a long-running, multi-session backend over a Unix domain socket. It is a
 thin, general-purpose wrapper: clients get a headless Claude Code they can
 reach from any language, any process.
@@ -43,7 +43,7 @@ does not implement a tool protocol, does not filter events. It:
 - Inventing a tool protocol. Clients either use Claude Code's native tools
   (via `--tools`, `--mcp-config`, etc.) or implement their own protocol in
   their own system prompt. The daemon does not parse assistant output.
-- Multi-user daemons. One `ccsockd` per OS user. Socket perms (0600) are the
+- Multi-user daemons. One `blemeesd` per OS user. Socket perms (0600) are the
   only access control.
 - Remote access (TCP/TLS). Use SSH socket forwarding if needed.
 - Running `claude` interactively (without `-p`).
@@ -57,9 +57,9 @@ does not implement a tool protocol, does not filter events. It:
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│ ccsockd (single asyncio event loop)                  │
+│ blemeesd (single asyncio event loop)                  │
 │                                                      │
-│   UnixServer  listens on $XDG_RUNTIME_DIR/ccsockd.sock
+│   UnixServer  listens on $XDG_RUNTIME_DIR/blemeesd.sock
 │      │                                               │
 │      ├─ Connection 1                                 │
 │      │    ├─ Session s_abc  → Subprocess A (sonnet) │
@@ -87,9 +87,9 @@ does not implement a tool protocol, does not filter events. It:
 ## 4. File Layout
 
 ```
-ccsock/
+blemees/
   __init__.py
-  __main__.py       # python -m ccsock → daemon entry point
+  __main__.py       # python -m blemees → daemon entry point
   daemon.py         # UnixServer + connection dispatcher
   protocol.py       # wire protocol codec, message dataclasses
   session.py        # SessionTable
@@ -98,7 +98,7 @@ ccsock/
   errors.py         # typed exceptions
   logging.py        # structured logging helpers
   client.py         # reference Python client (~200 lines, stdlib only)
-tests/ccsock/
+tests/blemees/
   test_protocol.py
   test_session.py
   test_subprocess.py
@@ -107,7 +107,7 @@ tests/ccsock/
 ```
 
 Package is self-contained (no external imports outside stdlib). A console
-script `ccsockd` in `pyproject.toml` maps to `python -m ccsock`.
+script `blemeesd` in `pyproject.toml` maps to `python -m blemees`.
 
 ---
 
@@ -123,29 +123,28 @@ script `ccsockd` in `pyproject.toml` maps to `python -m ccsock`.
 
 ### 5.2 Message namespacing
 
-All daemon control messages use a `ccsockd.` prefix on their `type`. Events
-originating inside Claude Code keep their native `type` unchanged, plus a
-`session` field injected at the top level.
+Every `type` on the wire carries an explicit namespace prefix:
 
 | Direction | Prefix | Purpose |
 |---|---|---|
-| client ↔ daemon | `ccsockd.<verb>` | Control messages (hello, open, user, interrupt, close, error, …). |
-| daemon → client | (native CC `type`, no prefix) | Pass-through Claude Code events with `session` injected. |
+| client ↔ daemon | `blemeesd.<verb>` | Control messages (hello, open, user, interrupt, close, error, …). |
+| daemon → client | `claude.<native-type>` | Forwarded Claude Code events — the daemon prepends `claude.` to the CC-native `type` and injects `session`. Inner payloads (e.g. the `event` field of a stream event) are not rewritten. |
 
-Rationale: unambiguous separation between daemon-level and CC-level events.
-Clients can switch-case on `type` without worrying about collisions.
+Rationale: unambiguous separation between daemon-level frames, Claude
+Code events, and any future third-party sources. Clients can switch-case
+on `type` without worrying about collisions.
 
 ### 5.3 Handshake
 
 Client opens the connection and sends:
 ```json
-{"type":"ccsockd.hello","client":"your-tool/0.1","protocol":"ccsock/1"}
+{"type":"blemeesd.hello","client":"your-tool/0.1","protocol":"blemees/1"}
 ```
 Daemon replies:
 ```json
-{"type":"ccsockd.hello_ack","daemon":"ccsockd/0.1","protocol":"ccsock/1","pid":12345,"claude_version":"2.1.118"}
+{"type":"blemeesd.hello_ack","daemon":"blemeesd/0.1","protocol":"blemees/1","pid":12345,"claude_version":"2.1.118"}
 ```
-If `protocol` does not match, daemon sends `ccsockd.error` (code
+If `protocol` does not match, daemon sends `blemeesd.error` (code
 `protocol_mismatch`) and closes.
 
 ### 5.4 Session open
@@ -156,7 +155,7 @@ letting Claude Code apply its defaults.
 
 ```json
 {
-  "type": "ccsockd.open",
+  "type": "blemeesd.open",
   "id": "req_001",
   "session": "s_abc",
 
@@ -242,24 +241,24 @@ is used with `-p`). Clients cannot override.
 
 Daemon reply on success:
 ```json
-{"type":"ccsockd.opened","id":"req_001","session":"s_abc","subprocess_pid":54321}
+{"type":"blemeesd.opened","id":"req_001","session":"s_abc","subprocess_pid":54321}
 ```
 On failure:
 ```json
-{"type":"ccsockd.error","id":"req_001","session":"s_abc","code":"spawn_failed","message":"..."}
+{"type":"blemeesd.error","id":"req_001","session":"s_abc","code":"spawn_failed","message":"..."}
 ```
 
 ### 5.5 User message
 
 Client sends a new user turn to an open session:
 ```json
-{"type":"ccsockd.user","session":"s_abc","text":"Hello"}
+{"type":"blemeesd.user","session":"s_abc","text":"Hello"}
 ```
 
 For multimodal / richer content, clients pass an explicit `content` array
 using Claude Code's stream-json input schema directly:
 ```json
-{"type":"ccsockd.user","session":"s_abc","content":[{"type":"text","text":"What is in this image?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"..."}}]}
+{"type":"blemeesd.user","session":"s_abc","content":[{"type":"text","text":"What is in this image?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"..."}}]}
 ```
 If `content` is present, `text` is ignored.
 
@@ -268,17 +267,19 @@ No `id` required. Responses stream as events until the turn ends.
 ### 5.6 Event stream (daemon → client)
 
 The daemon reads each line of `claude -p` stdout, parses as JSON, injects
-`"session":"<id>"`, and forwards verbatim. Clients consume Claude Code's
-native event shapes (`system`, `stream_event`, `assistant`, `user`, `result`,
-`partial_assistant`, etc.).
+`"session":"<id>"`, and prepends `claude.` to the native `type` before
+forwarding. Clients see CC event shapes under a stable namespace
+(`claude.system`, `claude.stream_event`, `claude.assistant`,
+`claude.user`, `claude.result`, `claude.partial_assistant`, etc.). The
+inner payload (e.g. the `event` field of a `stream_event`) is untouched.
 
 Example (abridged):
 ```json
-{"session":"s_abc","type":"system","subtype":"init","model":"claude-sonnet-4-6","tools":["Bash","Read","Edit"]}
-{"session":"s_abc","type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hel"}}}
-{"session":"s_abc","type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"lo"}}}
-{"session":"s_abc","type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello"}]}}
-{"session":"s_abc","type":"result","subtype":"success","duration_ms":1254,"num_turns":1}
+{"session":"s_abc","type":"claude.system","subtype":"init","model":"claude-sonnet-4-6","tools":["Bash","Read","Edit"]}
+{"session":"s_abc","type":"claude.stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hel"}}}
+{"session":"s_abc","type":"claude.stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"lo"}}}
+{"session":"s_abc","type":"claude.assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello"}]}}
+{"session":"s_abc","type":"claude.result","subtype":"success","duration_ms":1254,"num_turns":1}
 ```
 
 The daemon does NOT translate, filter, deduplicate, or re-shape these events.
@@ -288,7 +289,7 @@ echo to avoid double-counting.
 Events that arrive on the subprocess's **stderr** are wrapped and forwarded
 as well (for visibility into CC warnings / auth errors):
 ```json
-{"session":"s_abc","type":"ccsockd.stderr","line":"..."}
+{"session":"s_abc","type":"blemeesd.stderr","line":"..."}
 ```
 These are rate-limited to prevent a broken subprocess from flooding the
 client. Default cap: 50 lines per 10 s; excess dropped with a counter.
@@ -297,37 +298,37 @@ client. Default cap: 50 lines per 10 s; excess dropped with a counter.
 
 Client cancels the in-flight turn:
 ```json
-{"type":"ccsockd.interrupt","session":"s_abc"}
+{"type":"blemeesd.interrupt","session":"s_abc"}
 ```
 
 Daemon:
 1. Sends SIGTERM to the subprocess. After 500 ms, SIGKILL if still alive.
-2. Emits `ccsockd.interrupted`:
+2. Emits `blemeesd.interrupted`:
    ```json
-   {"type":"ccsockd.interrupted","session":"s_abc"}
+   {"type":"blemeesd.interrupted","session":"s_abc"}
    ```
 3. Respawns the subprocess immediately with `--resume <session>` (all other
-   flags identical to the original open), so the next `ccsockd.user` works
+   flags identical to the original open), so the next `blemeesd.user` works
    without further ceremony.
 
 Any CC events emitted before the kill are forwarded as normal. Already-sent
 deltas are NOT retracted.
 
-Interrupt is a no-op (returns `ccsockd.interrupted` with `was_idle: true`) if
+Interrupt is a no-op (returns `blemeesd.interrupted` with `was_idle: true`) if
 no turn is in flight.
 
 ### 5.8 Close
 
 Explicit session close:
 ```json
-{"type":"ccsockd.close","id":"req_099","session":"s_abc","delete":true}
+{"type":"blemeesd.close","id":"req_099","session":"s_abc","delete":true}
 ```
 - `delete: true` → daemon removes the CC session file from disk after kill.
 - `delete: false` (default) → session file retained for later `resume: true`.
 
 Daemon replies:
 ```json
-{"type":"ccsockd.closed","id":"req_099","session":"s_abc"}
+{"type":"blemeesd.closed","id":"req_099","session":"s_abc"}
 ```
 
 ### 5.9 Connection close
@@ -342,11 +343,11 @@ messages:
 
 ### 5.10 Errors
 
-Errors are `ccsockd.error` frames with a machine-readable `code`. The daemon
+Errors are `blemeesd.error` frames with a machine-readable `code`. The daemon
 never crashes the process on a per-session error.
 
 ```json
-{"type":"ccsockd.error","id":"req_001","session":"s_abc","code":"claude_crashed","message":"stderr tail: ..."}
+{"type":"blemeesd.error","id":"req_001","session":"s_abc","code":"claude_crashed","message":"stderr tail: ..."}
 ```
 
 Error codes the client must handle:
@@ -355,7 +356,7 @@ Error codes the client must handle:
 |---|---|---|
 | `protocol_mismatch` | Incompatible protocol version. | Yes. |
 | `invalid_message` | Malformed JSON or bad field. | No. |
-| `unknown_message` | Unknown `ccsockd.*` type. | No. |
+| `unknown_message` | Unknown `blemeesd.*` type. | No. |
 | `unsafe_flag` | Client requested a refused flag. | No. |
 | `session_unknown` | No such session. | No. |
 | `session_exists` | Session id collides on open. | No. |
@@ -395,7 +396,7 @@ Spawn context:
 
 ### 6.2 stdin — feeding user messages
 
-Each client `ccsockd.user` becomes one line on the subprocess stdin, in
+Each client `blemeesd.user` becomes one line on the subprocess stdin, in
 Claude Code's stream-json input shape. Canonical form for simple text:
 ```json
 {"type":"user","message":{"role":"user","content":"<text>"},"session_id":"<session>"}
@@ -407,7 +408,7 @@ For `content` arrays, the daemon passes them through:
 Flush after each line.
 
 Writes to stdin must be queued: only one turn in flight at a time per
-session. If the client sends another `ccsockd.user` while the subprocess has
+session. If the client sends another `blemeesd.user` while the subprocess has
 not yet emitted a `result` event, the daemon replies with
 `error{code:"session_busy"}` and drops the message.
 
@@ -449,8 +450,8 @@ common model for instant `open`. Cost: one idle subprocess per hot model.
 
 ## 7. Security
 
-- **Socket path:** `$XDG_RUNTIME_DIR/ccsockd.sock` on Linux. On macOS, which
-  lacks `$XDG_RUNTIME_DIR`, use `/tmp/ccsockd-$UID.sock`. Configurable via
+- **Socket path:** `$XDG_RUNTIME_DIR/blemeesd.sock` on Linux. On macOS, which
+  lacks `$XDG_RUNTIME_DIR`, use `/tmp/blemeesd-$UID.sock`. Configurable via
   `--socket`.
 - **Permissions:** socket created with mode `0600`. If the path exists on
   startup and is not owned by the current UID, refuse to start.
@@ -460,7 +461,7 @@ common model for instant `open`. Cost: one idle subprocess per hot model.
 - **Peer identity:** the daemon captures `SO_PEERCRED` (Linux) /
   `LOCAL_PEERCRED` (macOS) at connect time and logs peer PID/UID.
   Informational only; no enforcement in v0.1.
-- **Secret handling:** `system_prompt`, `ccsockd.user` content, and event
+- **Secret handling:** `system_prompt`, `blemeesd.user` content, and event
   deltas are never logged at INFO+. At DEBUG, bodies are redacted to
   `<redacted N chars>`. OAuth tokens are never logged.
 
@@ -468,17 +469,17 @@ common model for instant `open`. Cost: one idle subprocess per hot model.
 
 ## 8. Configuration
 
-Config file (optional): `~/.config/ccsockd/config.toml`. CLI flags and env
-vars override. Env prefix: `CCSOCKD_`.
+Config file (optional): `~/.config/blemeesd/config.toml`. CLI flags and env
+vars override. Env prefix: `BLEMEESD_`.
 
 | Key | CLI flag | Env var | Default |
 |---|---|---|---|
-| `socket_path` | `--socket` | `CCSOCKD_SOCKET` | `$XDG_RUNTIME_DIR/ccsockd.sock` |
-| `claude_bin` | `--claude` | `CCSOCKD_CLAUDE` | `claude` on PATH |
-| `log_level` | `--log-level` | `CCSOCKD_LOG_LEVEL` | `info` |
-| `log_file` | `--log-file` | `CCSOCKD_LOG_FILE` | stderr |
-| `max_line_bytes` | — | `CCSOCKD_MAX_LINE` | `16777216` |
-| `idle_timeout_s` | — | `CCSOCKD_IDLE_TIMEOUT` | `900` |
+| `socket_path` | `--socket` | `BLEMEESD_SOCKET` | `$XDG_RUNTIME_DIR/blemeesd.sock` |
+| `claude_bin` | `--claude` | `BLEMEESD_CLAUDE` | `claude` on PATH |
+| `log_level` | `--log-level` | `BLEMEESD_LOG_LEVEL` | `info` |
+| `log_file` | `--log-file` | `BLEMEESD_LOG_FILE` | stderr |
+| `max_line_bytes` | — | `BLEMEESD_MAX_LINE` | `16777216` |
+| `idle_timeout_s` | — | `BLEMEESD_IDLE_TIMEOUT` | `900` |
 | `session_retention_days` | — | — | `7` (0 disables) |
 | `max_sessions_per_connection` | — | — | `32` |
 | `max_concurrent_sessions` | — | — | `64` |
@@ -487,13 +488,13 @@ vars override. Env prefix: `CCSOCKD_`.
 
 CLI:
 ```
-ccsockd [--socket PATH] [--claude PATH] [--log-level LEVEL] [--log-file PATH]
+blemeesd [--socket PATH] [--claude PATH] [--log-level LEVEL] [--log-file PATH]
         [--config FILE] [--version]
 ```
 
 v0.1 runs in the foreground only. Use systemd/launchd for background.
 
-### 8.1 systemd user unit (ship in `packaging/ccsockd/ccsockd.service`)
+### 8.1 systemd user unit (ship in `packaging/blemeesd/blemeesd.service`)
 
 ```ini
 [Unit]
@@ -501,7 +502,7 @@ Description=Headless Claude Code daemon
 After=default.target
 
 [Service]
-ExecStart=%h/.local/bin/ccsockd
+ExecStart=%h/.local/bin/blemeesd
 Restart=on-failure
 RestartSec=2s
 
@@ -509,7 +510,7 @@ RestartSec=2s
 WantedBy=default.target
 ```
 
-### 8.2 launchd plist (ship in `packaging/ccsockd/com.ccsock.ccsockd.plist`)
+### 8.2 launchd plist (ship in `packaging/blemeesd/com.blemees.blemeesd.plist`)
 
 Standard KeepAlive-on-crash plist with `ThrottleInterval=5`.
 
@@ -520,14 +521,14 @@ Standard KeepAlive-on-crash plist with `ThrottleInterval=5`.
 ### 9.1 Subprocess crash mid-turn
 On EOF on stdout or non-zero exit during a turn:
 ```json
-{"type":"ccsockd.error","session":"s_abc","code":"claude_crashed","message":"<stderr tail>"}
+{"type":"blemeesd.error","session":"s_abc","code":"claude_crashed","message":"<stderr tail>"}
 ```
-Session remains open. Next `ccsockd.user` respawns via `--resume`.
+Session remains open. Next `blemeesd.user` respawns via `--resume`.
 
 ### 9.2 OAuth expired
 Detect patterns in stderr: `401`, `OAuth token expired`, `Please run claude auth`, `Session authentication failed`. Emit:
 ```json
-{"type":"ccsockd.error","session":"s_abc","code":"oauth_expired","message":"Run `claude auth` to re-authenticate."}
+{"type":"blemeesd.error","session":"s_abc","code":"oauth_expired","message":"Run `claude auth` to re-authenticate."}
 ```
 Do not retry automatically. Subsequent user messages repeat the error until
 the user re-auths and the daemon sees a successful spawn.
@@ -586,13 +587,13 @@ Overall shutdown budget 5 s, then force-exit 1.
 ### 11.2 Mock-claude tests
 Provide a Python stub `claude` script that reads stream-json on stdin and
 emits scripted stream-json events on stdout. Tests:
-- Full turn → `result` event → `ccsockd.user` works again.
+- Full turn → `result` event → `blemeesd.user` works again.
 - Crash mid-turn → `claude_crashed`, next turn respawns.
 - Interrupt → SIGTERM observed, respawn with `--resume`, continues.
 - Concurrent sessions (3 parallel) do not interfere.
 - `--session-id` vs `--resume` flag mapping is correct.
 - Unsafe flags (e.g. `--dangerously-skip-permissions`) are rejected at the
-  `ccsockd.open` stage.
+  `blemeesd.open` stage.
 
 ### 11.3 End-to-end tests (`requires_claude` pytest mark)
 Skipped unless the real `claude` CLI is installed and authenticated.
@@ -601,7 +602,7 @@ Skipped unless the real `claude` CLI is installed and authenticated.
 - Close → reattach from new connection with `resume: true` → context intact.
 - Interrupt mid-generation → respawn → continuation works.
 
-### 11.4 Latency benchmarks (`python -m ccsock.bench`)
+### 11.4 Latency benchmarks (`python -m blemees.bench`)
 Acceptance targets on an ordinary dev machine:
 - Cold open → first event ≤ 1.5 s.
 - Warm user → first event ≤ 0.5 s.
@@ -613,7 +614,7 @@ These mirror the Hermes spike numbers (0.98 s cold, ~0.8 s resume).
 
 ## 12. Versioning
 
-- Protocol: `ccsock/1` in v0.1. Breaking changes bump to `ccsock/2`. Daemons
+- Protocol: `blemees/1` in v0.1. Breaking changes bump to `blemees/2`. Daemons
   MAY support multiple protocol versions; clients MUST request one.
 - Daemon: semver. `0.x` unstable; breaking changes allowed pre-1.0.
 
@@ -634,17 +635,17 @@ These mirror the Hermes spike numbers (0.98 s cold, ~0.8 s resume).
 
 ## 14. Deliverables Checklist
 
-- [ ] `ccsock/` package per §4.
-- [ ] `ccsockd` console script in `pyproject.toml`.
+- [ ] `blemees/` package per §4.
+- [ ] `blemeesd` console script in `pyproject.toml`.
 - [ ] Full wire protocol per §5.
 - [ ] Subprocess manager per §6.
 - [ ] Unit + mock tests per §11.1–11.2.
 - [ ] E2E tests per §11.3, gated by `requires_claude`.
-- [ ] systemd unit + launchd plist in `packaging/ccsockd/`.
-- [ ] `ccsock/README.md`: install, protocol summary, worked client example
+- [ ] systemd unit + launchd plist in `packaging/blemeesd/`.
+- [ ] `blemees/README.md`: install, protocol summary, worked client example
       (Appendix A).
-- [ ] Reference client `ccsock/client.py` (≤200 lines, stdlib only) with:
-      `async with CcsockClient.connect() as c`,
+- [ ] Reference client `blemees/client.py` (≤200 lines, stdlib only) with:
+      `async with BlemeesClient.connect() as c`,
       `async with c.open_session(**kwargs) as sess`,
       `await sess.send_user(text | content=[...])`,
       `async for event in sess.events()`,
@@ -656,10 +657,10 @@ These mirror the Hermes spike numbers (0.98 s cold, ~0.8 s resume).
 
 ```python
 import asyncio, uuid
-from ccsock.client import CcsockClient
+from blemees.client import BlemeesClient
 
 async def main():
-    async with CcsockClient.connect() as c:
+    async with BlemeesClient.connect() as c:
         async with c.open_session(
             session=str(uuid.uuid4()),
             model="sonnet",
@@ -671,16 +672,16 @@ async def main():
             await sess.send_user("What is 2+2?")
             async for event in sess.events():
                 t = event.get("type")
-                if t == "stream_event":
+                if t == "claude.stream_event":
                     inner = event.get("event", {})
                     if inner.get("type") == "content_block_delta":
                         delta = inner.get("delta", {})
                         if delta.get("type") == "text_delta":
                             print(delta["text"], end="", flush=True)
-                elif t == "result":
+                elif t == "claude.result":
                     print()
                     break
-                elif t == "ccsockd.error":
+                elif t == "blemeesd.error":
                     raise RuntimeError(event["message"])
 
 asyncio.run(main())
@@ -692,7 +693,7 @@ asyncio.run(main())
 
 Do not treat as unknown; refuse explicitly so the wire versioning stays clean:
 
-- `ccsockd.ping` / `ccsockd.pong` — liveness (v0.2).
-- `ccsockd.status` — daemon introspection (v0.2).
-- `ccsockd.list_sessions` — enumerate (v0.2).
-- `ccsockd.watch` — tail events from a session without driving it (v0.2).
+- `blemeesd.ping` / `blemeesd.pong` — liveness (v0.2).
+- `blemeesd.status` — daemon introspection (v0.2).
+- `blemeesd.list_sessions` — enumerate (v0.2).
+- `blemeesd.watch` — tail events from a session without driving it (v0.2).

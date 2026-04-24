@@ -6,9 +6,9 @@ import asyncio
 
 import pytest
 
-from ccsock.errors import SessionExistsError, SessionUnknownError
-from ccsock.protocol import OpenMessage
-from ccsock.session import Session, SessionTable
+from blemees.errors import SessionExistsError, SessionUnknownError
+from blemees.protocol import OpenMessage
+from blemees.session import Session, SessionTable
 
 
 def _open_msg(session: str = "s1") -> OpenMessage:

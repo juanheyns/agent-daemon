@@ -1,4 +1,4 @@
-"""Console entry point: ``python -m ccsock`` / ``ccsockd``."""
+"""Console entry point: ``python -m blemees`` / ``blemeesd``."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .logging import configure
 def main() -> int:
     config, want_version = load()
     if want_version:
-        print(f"ccsockd {__version__}")
+        print(f"blemeesd {__version__}")
         return 0
     logger = configure(config.log_level, config.log_file)
     try:

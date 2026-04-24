@@ -1,4 +1,4 @@
-"""Unit tests for ccsock.protocol."""
+"""Unit tests for blemees.protocol."""
 
 from __future__ import annotations
 
@@ -6,13 +6,13 @@ import json
 
 import pytest
 
-from ccsock import PROTOCOL_VERSION
-from ccsock.errors import (
+from blemees import PROTOCOL_VERSION
+from blemees.errors import (
     OversizeMessageError,
     ProtocolError,
     UnsafeFlagError,
 )
-from ccsock.protocol import (
+from blemees.protocol import (
     OpenMessage,
     build_claude_argv,
     build_user_stdin_line,
@@ -34,7 +34,7 @@ from ccsock.protocol import (
 # ---------------------------------------------------------------------------
 
 def test_encode_is_newline_terminated_utf8():
-    data = encode({"type": "ccsockd.hello", "emoji": "🌟"})
+    data = encode({"type": "blemeesd.hello", "emoji": "🌟"})
     assert data.endswith(b"\n")
     assert b"\n" not in data[:-1]
     decoded = json.loads(data)
@@ -42,8 +42,8 @@ def test_encode_is_newline_terminated_utf8():
 
 
 def test_parse_line_accepts_valid_object():
-    obj = parse_line(b'{"type":"ccsockd.hello","protocol":"ccsock/1"}\n')
-    assert obj["type"] == "ccsockd.hello"
+    obj = parse_line(b'{"type":"blemeesd.hello","protocol":"blemees/1"}\n')
+    assert obj["type"] == "blemeesd.hello"
 
 
 def test_parse_line_rejects_non_object():
@@ -90,19 +90,19 @@ def test_parse_line_allows_embedded_nul_in_json_string():
 
 def test_parse_hello_requires_protocol():
     with pytest.raises(ProtocolError):
-        parse_hello({"type": "ccsockd.hello"})
+        parse_hello({"type": "blemeesd.hello"})
 
 
 def test_parse_hello_ok():
-    h = parse_hello({"type": "ccsockd.hello", "protocol": "ccsock/1", "client": "t/0.1"})
-    assert h.protocol == "ccsock/1"
+    h = parse_hello({"type": "blemeesd.hello", "protocol": "blemees/1", "client": "t/0.1"})
+    assert h.protocol == "blemees/1"
     assert h.client == "t/0.1"
 
 
 def test_hello_ack_shape():
     ack = hello_ack("0.1.0", 1234, "2.1.118")
-    assert ack["type"] == "ccsockd.hello_ack"
-    assert ack["daemon"] == "ccsockd/0.1.0"
+    assert ack["type"] == "blemeesd.hello_ack"
+    assert ack["daemon"] == "blemeesd/0.1.0"
     assert ack["protocol"] == PROTOCOL_VERSION
     assert ack["pid"] == 1234
     assert ack["claude_version"] == "2.1.118"
@@ -114,14 +114,14 @@ def test_hello_ack_shape():
 
 def test_parse_open_requires_session():
     with pytest.raises(ProtocolError):
-        parse_open({"type": "ccsockd.open"})
+        parse_open({"type": "blemeesd.open"})
 
 
 def test_parse_open_rejects_unsafe_flag_field():
     with pytest.raises(UnsafeFlagError):
         parse_open(
             {
-                "type": "ccsockd.open",
+                "type": "blemeesd.open",
                 "session": "s1",
                 "dangerously_skip_permissions": True,
             }
@@ -132,7 +132,7 @@ def test_parse_open_rejects_unsafe_flag_literal_in_values():
     with pytest.raises(UnsafeFlagError):
         parse_open(
             {
-                "type": "ccsockd.open",
+                "type": "blemeesd.open",
                 "session": "s1",
                 "disallowed_tools": ["--dangerously-skip-permissions"],
             }
@@ -143,7 +143,7 @@ def test_parse_open_allows_bypass_permissions_mode():
     # Explicitly allowed by spec §5.4.
     msg = parse_open(
         {
-            "type": "ccsockd.open",
+            "type": "blemeesd.open",
             "session": "s1",
             "permission_mode": "bypassPermissions",
         }
@@ -256,7 +256,7 @@ def test_build_argv_unset_fields_omit_flags():
 # ---------------------------------------------------------------------------
 
 def test_parse_user_text():
-    u = parse_user({"type": "ccsockd.user", "session": "s1", "text": "hello"})
+    u = parse_user({"type": "blemeesd.user", "session": "s1", "text": "hello"})
     assert u.text == "hello"
     assert u.content is None
 
@@ -264,7 +264,7 @@ def test_parse_user_text():
 def test_parse_user_content():
     u = parse_user(
         {
-            "type": "ccsockd.user",
+            "type": "blemeesd.user",
             "session": "s1",
             "content": [{"type": "text", "text": "hi"}],
         }
@@ -274,7 +274,7 @@ def test_parse_user_content():
 
 def test_parse_user_requires_text_or_content():
     with pytest.raises(ProtocolError):
-        parse_user({"type": "ccsockd.user", "session": "s1"})
+        parse_user({"type": "blemeesd.user", "session": "s1"})
 
 
 def test_build_user_stdin_line_text():
@@ -298,16 +298,16 @@ def test_build_user_stdin_line_content_wins_over_text():
 
 def test_parse_interrupt_requires_session():
     with pytest.raises(ProtocolError):
-        parse_interrupt({"type": "ccsockd.interrupt"})
+        parse_interrupt({"type": "blemeesd.interrupt"})
 
 
 def test_parse_close_defaults_delete_false():
-    c = parse_close({"type": "ccsockd.close", "session": "s1"})
+    c = parse_close({"type": "blemeesd.close", "session": "s1"})
     assert c.delete is False
 
 
 def test_parse_close_delete_true():
-    c = parse_close({"type": "ccsockd.close", "session": "s1", "delete": True})
+    c = parse_close({"type": "blemeesd.close", "session": "s1", "delete": True})
     assert c.delete is True
 
 
@@ -317,17 +317,17 @@ def test_parse_close_delete_true():
 
 def test_parse_list_sessions_requires_cwd():
     with pytest.raises(ProtocolError):
-        parse_list_sessions({"type": "ccsockd.list_sessions"})
+        parse_list_sessions({"type": "blemeesd.list_sessions"})
 
 
 def test_parse_list_sessions_rejects_non_string_cwd():
     with pytest.raises(ProtocolError):
-        parse_list_sessions({"type": "ccsockd.list_sessions", "cwd": 42})
+        parse_list_sessions({"type": "blemeesd.list_sessions", "cwd": 42})
 
 
 def test_parse_list_sessions_ok():
     msg = parse_list_sessions(
-        {"type": "ccsockd.list_sessions", "id": "r1", "cwd": "/home/u/proj"}
+        {"type": "blemeesd.list_sessions", "id": "r1", "cwd": "/home/u/proj"}
     )
     assert msg.cwd == "/home/u/proj"
     assert msg.id == "r1"

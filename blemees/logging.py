@@ -1,4 +1,4 @@
-"""Structured JSON logging for ccsockd (spec §10).
+"""Structured JSON logging for blemeesd (spec §10).
 
 The daemon emits one JSON object per log line to stderr (or to a file via
 ``--log-file``). Secrets are never logged at INFO+; at DEBUG they are
@@ -30,7 +30,7 @@ class _JsonFormatter(logging.Formatter):
             "level": record.levelname.lower(),
             "event": record.getMessage(),
         }
-        extra = getattr(record, "_ccsock_extra", None)
+        extra = getattr(record, "_blemees_extra", None)
         if isinstance(extra, dict):
             for key, value in extra.items():
                 if key not in payload:
@@ -65,7 +65,7 @@ class StructuredLogger:
             return
         payload = dict(self._base)
         payload.update(fields)
-        self._logger.log(level, event, extra={"_ccsock_extra": payload})
+        self._logger.log(level, event, extra={"_blemees_extra": payload})
 
     def debug(self, event: str, **fields: Any) -> None:
         self._log(logging.DEBUG, event, **fields)
@@ -82,13 +82,13 @@ class StructuredLogger:
     def exception(self, event: str, **fields: Any) -> None:
         payload = dict(self._base)
         payload.update(fields)
-        self._logger.exception(event, extra={"_ccsock_extra": payload})
+        self._logger.exception(event, extra={"_blemees_extra": payload})
 
 
 def configure(level: str = "info", log_file: str | None = None) -> StructuredLogger:
     """Configure root-level structured logging; returns a bound logger."""
 
-    root = logging.getLogger("ccsock")
+    root = logging.getLogger("blemees")
     root.setLevel(LEVELS.get(level.lower(), logging.INFO))
     for handler in list(root.handlers):
         root.removeHandler(handler)

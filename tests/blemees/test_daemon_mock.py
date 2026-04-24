@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from ccsock import PROTOCOL_VERSION
+from blemees import PROTOCOL_VERSION
 
 
 pytestmark = pytest.mark.asyncio
@@ -26,14 +26,14 @@ async def test_hello_roundtrip(daemon_and_socket):
     writer.write(
         (
             json.dumps(
-                {"type": "ccsockd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION}
+                {"type": "blemeesd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION}
             )
             + "\n"
         ).encode()
     )
     await writer.drain()
     ack = json.loads((await reader.readuntil(b"\n")).decode())
-    assert ack["type"] == "ccsockd.hello_ack"
+    assert ack["type"] == "blemeesd.hello_ack"
     assert ack["protocol"] == PROTOCOL_VERSION
     writer.close()
     await writer.wait_closed()
@@ -43,11 +43,11 @@ async def test_protocol_mismatch_closes_connection(daemon_and_socket):
     _daemon, path = daemon_and_socket
     reader, writer = await asyncio.open_unix_connection(path)
     writer.write(
-        (json.dumps({"type": "ccsockd.hello", "protocol": "ccsock/99"}) + "\n").encode()
+        (json.dumps({"type": "blemeesd.hello", "protocol": "blemees/99"}) + "\n").encode()
     )
     await writer.drain()
     err = json.loads((await reader.readuntil(b"\n")).decode())
-    assert err["type"] == "ccsockd.error"
+    assert err["type"] == "blemeesd.error"
     assert err["code"] == "protocol_mismatch"
 
 
@@ -55,13 +55,13 @@ async def test_open_then_user_then_result(client_factory, fake_mode):
     fake_mode("normal")
     client = await client_factory()
     await client.send(
-        {"type": "ccsockd.open", "id": "r1", "session": "s1", "tools": ""}
+        {"type": "blemeesd.open", "id": "r1", "session": "s1", "tools": ""}
     )
-    opened = await client.wait_for(lambda e: e["type"] == "ccsockd.opened")
+    opened = await client.wait_for(lambda e: e["type"] == "blemeesd.opened")
     assert opened["session"] == "s1"
-    await client.send({"type": "ccsockd.user", "session": "s1", "text": "hello"})
+    await client.send({"type": "blemeesd.user", "session": "s1", "text": "hello"})
     result = await client.wait_for(
-        lambda e: e.get("type") == "result" and e.get("session") == "s1"
+        lambda e: e.get("type") == "claude.result" and e.get("session") == "s1"
     )
     assert result["subtype"] == "success"
 
@@ -70,27 +70,27 @@ async def test_unsafe_flag_rejected_on_open(client_factory):
     client = await client_factory()
     await client.send(
         {
-            "type": "ccsockd.open",
+            "type": "blemeesd.open",
             "id": "r1",
             "session": "s1",
             "dangerously_skip_permissions": True,
         }
     )
-    err = await client.wait_for(lambda e: e.get("type") == "ccsockd.error")
+    err = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
     assert err["code"] == "unsafe_flag"
 
 
 async def test_unknown_message_returns_error(client_factory):
     client = await client_factory()
-    await client.send({"type": "ccsockd.nonsense", "session": "s1"})
-    err = await client.wait_for(lambda e: e.get("type") == "ccsockd.error")
+    await client.send({"type": "blemeesd.nonsense", "session": "s1"})
+    err = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
     assert err["code"] == "unknown_message"
 
 
 async def test_reserved_types_return_unknown(client_factory):
     client = await client_factory()
-    await client.send({"type": "ccsockd.ping"})
-    err = await client.wait_for(lambda e: e.get("type") == "ccsockd.error")
+    await client.send({"type": "blemeesd.ping"})
+    err = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
     assert err["code"] == "unknown_message"
 
 
@@ -101,7 +101,7 @@ async def test_session_flag_mapping_in_argv(
     client = await client_factory()
     await client.send(
         {
-            "type": "ccsockd.open",
+            "type": "blemeesd.open",
             "id": "r1",
             "session": "s-map",
             "model": "sonnet",
@@ -109,9 +109,9 @@ async def test_session_flag_mapping_in_argv(
             "permission_mode": "bypassPermissions",
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "ccsockd.opened")
+    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
     # Wait for the first CC event so we know fake_claude has recorded its argv.
-    await client.wait_for(lambda e: e.get("type") == "system")
+    await client.wait_for(lambda e: e.get("type") == "claude.system")
     argv_lines = Path(argv_trace_path).read_text().strip().splitlines()
     assert argv_lines, "fake claude was not spawned"
     argv = json.loads(argv_lines[0])
@@ -132,15 +132,15 @@ async def test_resume_flag_used_when_requested(
     client = await client_factory()
     await client.send(
         {
-            "type": "ccsockd.open",
+            "type": "blemeesd.open",
             "id": "r1",
             "session": "s-resume",
             "resume": True,
             "tools": "",
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "ccsockd.opened")
-    await client.wait_for(lambda e: e.get("type") == "system")
+    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "claude.system")
     argv = json.loads(Path(argv_trace_path).read_text().strip().splitlines()[0])
     assert "--resume" in argv
     assert "--session-id" not in argv
@@ -152,14 +152,14 @@ async def test_interrupt_respawns_with_resume(
     fake_mode("slow")
     client = await client_factory()
     await client.send(
-        {"type": "ccsockd.open", "id": "r1", "session": "s-int", "tools": ""}
+        {"type": "blemeesd.open", "id": "r1", "session": "s-int", "tools": ""}
     )
-    await client.wait_for(lambda e: e.get("type") == "ccsockd.opened")
-    await client.send({"type": "ccsockd.user", "session": "s-int", "text": "go"})
+    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.send({"type": "blemeesd.user", "session": "s-int", "text": "go"})
     # Wait until streaming starts.
-    await client.wait_for(lambda e: e.get("type") == "stream_event")
-    await client.send({"type": "ccsockd.interrupt", "session": "s-int"})
-    ir = await client.wait_for(lambda e: e.get("type") == "ccsockd.interrupted")
+    await client.wait_for(lambda e: e.get("type") == "claude.stream_event")
+    await client.send({"type": "blemeesd.interrupt", "session": "s-int"})
+    ir = await client.wait_for(lambda e: e.get("type") == "blemeesd.interrupted")
     assert ir["was_idle"] is False
 
     # After interrupt the argv trace should contain a second line using --resume.
@@ -181,21 +181,21 @@ async def test_concurrent_sessions_dont_interfere(client_factory, fake_mode):
     client = await client_factory()
     for sid in ("a", "b", "c"):
         await client.send(
-            {"type": "ccsockd.open", "id": f"r{sid}", "session": sid, "tools": ""}
+            {"type": "blemeesd.open", "id": f"r{sid}", "session": sid, "tools": ""}
         )
     opens = set()
     while len(opens) < 3:
         evt = await client.recv(timeout=5.0)
-        if evt.get("type") == "ccsockd.opened":
+        if evt.get("type") == "blemeesd.opened":
             opens.add(evt["session"])
 
     for sid in ("a", "b", "c"):
-        await client.send({"type": "ccsockd.user", "session": sid, "text": f"hi-{sid}"})
+        await client.send({"type": "blemeesd.user", "session": sid, "text": f"hi-{sid}"})
 
     saw: dict[str, bool] = {}
     while len(saw) < 3:
         evt = await client.recv(timeout=5.0)
-        if evt.get("type") == "result" and evt.get("session") in {"a", "b", "c"}:
+        if evt.get("type") == "claude.result" and evt.get("session") in {"a", "b", "c"}:
             saw[evt["session"]] = True
     assert set(saw) == {"a", "b", "c"}
 
@@ -206,20 +206,20 @@ async def test_crash_mid_turn_then_recover(
     fake_mode("crash")
     client = await client_factory()
     await client.send(
-        {"type": "ccsockd.open", "id": "r1", "session": "s-crash", "tools": ""}
+        {"type": "blemeesd.open", "id": "r1", "session": "s-crash", "tools": ""}
     )
-    await client.wait_for(lambda e: e.get("type") == "ccsockd.opened")
-    await client.send({"type": "ccsockd.user", "session": "s-crash", "text": "boom"})
+    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.send({"type": "blemeesd.user", "session": "s-crash", "text": "boom"})
     err = await client.wait_for(
-        lambda e: e.get("type") == "ccsockd.error" and e.get("code") == "claude_crashed"
+        lambda e: e.get("type") == "blemeesd.error" and e.get("code") == "claude_crashed"
     )
     assert err["session"] == "s-crash"
 
     # Next user message should transparently respawn (spec §9.1).
     fake_mode("normal")
-    await client.send({"type": "ccsockd.user", "session": "s-crash", "text": "again"})
+    await client.send({"type": "blemeesd.user", "session": "s-crash", "text": "again"})
     await client.wait_for(
-        lambda e: e.get("type") == "result" and e.get("session") == "s-crash"
+        lambda e: e.get("type") == "claude.result" and e.get("session") == "s-crash"
     )
 
 
@@ -227,54 +227,54 @@ async def test_close_removes_session(client_factory, fake_mode):
     fake_mode("normal")
     client = await client_factory()
     await client.send(
-        {"type": "ccsockd.open", "id": "r1", "session": "s-close", "tools": ""}
+        {"type": "blemeesd.open", "id": "r1", "session": "s-close", "tools": ""}
     )
-    await client.wait_for(lambda e: e.get("type") == "ccsockd.opened")
+    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
     await client.send(
-        {"type": "ccsockd.close", "id": "r2", "session": "s-close", "delete": False}
+        {"type": "blemeesd.close", "id": "r2", "session": "s-close", "delete": False}
     )
-    closed = await client.wait_for(lambda e: e.get("type") == "ccsockd.closed")
+    closed = await client.wait_for(lambda e: e.get("type") == "blemeesd.closed")
     assert closed["session"] == "s-close"
 
     # Re-open without resume should succeed since session is gone.
     await client.send(
-        {"type": "ccsockd.open", "id": "r3", "session": "s-close", "tools": ""}
+        {"type": "blemeesd.open", "id": "r3", "session": "s-close", "tools": ""}
     )
-    await client.wait_for(lambda e: e.get("type") == "ccsockd.opened")
+    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
 
 
 async def test_detach_allows_reattach_via_resume(client_factory, fake_mode):
     fake_mode("normal")
     c1 = await client_factory()
     await c1.send(
-        {"type": "ccsockd.open", "id": "r1", "session": "s-det", "tools": ""}
+        {"type": "blemeesd.open", "id": "r1", "session": "s-det", "tools": ""}
     )
-    await c1.wait_for(lambda e: e.get("type") == "ccsockd.opened")
+    await c1.wait_for(lambda e: e.get("type") == "blemeesd.opened")
     await c1.close()
 
     # New connection can reattach via resume:true.
     c2 = await client_factory()
     await c2.send(
         {
-            "type": "ccsockd.open",
+            "type": "blemeesd.open",
             "id": "r2",
             "session": "s-det",
             "resume": True,
             "tools": "",
         }
     )
-    await c2.wait_for(lambda e: e.get("type") == "ccsockd.opened")
+    await c2.wait_for(lambda e: e.get("type") == "blemeesd.opened")
 
 
 async def test_invalid_message_keeps_connection_alive(client_factory):
     client = await client_factory()
     # Send a malformed open (no session).
-    await client.send({"type": "ccsockd.open", "id": "bad"})
-    err = await client.wait_for(lambda e: e.get("type") == "ccsockd.error")
+    await client.send({"type": "blemeesd.open", "id": "bad"})
+    err = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
     assert err["code"] == "invalid_message"
     # Connection still usable.
-    await client.send({"type": "ccsockd.ping"})
-    err2 = await client.wait_for(lambda e: e.get("type") == "ccsockd.error")
+    await client.send({"type": "blemeesd.ping"})
+    err2 = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
     assert err2["code"] == "unknown_message"
 
 
@@ -285,7 +285,7 @@ async def test_invalid_message_keeps_connection_alive(client_factory):
 def _seed_transcript(
     home_dir: Path, cwd: str, session_id: str, preview: str | None, mtime: int
 ) -> Path:
-    from ccsock.subprocess import project_dir_for_cwd as _pdfc
+    from blemees.subprocess import project_dir_for_cwd as _pdfc
     # Recompute project dir against the fake $HOME so the test matches the
     # runtime encoding.
     old_home = os.environ.get("HOME")
@@ -316,8 +316,8 @@ def _seed_transcript(
 
 async def test_list_sessions_requires_cwd(client_factory):
     client = await client_factory()
-    await client.send({"type": "ccsockd.list_sessions", "id": "r1"})
-    err = await client.wait_for(lambda e: e.get("type") == "ccsockd.error")
+    await client.send({"type": "blemeesd.list_sessions", "id": "r1"})
+    err = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
     assert err["code"] == "invalid_message"
 
 
@@ -325,9 +325,9 @@ async def test_list_sessions_empty_for_unknown_cwd(client_factory, tmp_path, mon
     monkeypatch.setenv("HOME", str(tmp_path))
     client = await client_factory()
     await client.send(
-        {"type": "ccsockd.list_sessions", "id": "r1", "cwd": "/nope/nope"}
+        {"type": "blemeesd.list_sessions", "id": "r1", "cwd": "/nope/nope"}
     )
-    reply = await client.wait_for(lambda e: e.get("type") == "ccsockd.sessions")
+    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
     assert reply["id"] == "r1"
     assert reply["cwd"] == "/nope/nope"
     assert reply["sessions"] == []
@@ -340,8 +340,8 @@ async def test_list_sessions_returns_sorted_on_disk(client_factory, tmp_path, mo
     _seed_transcript(tmp_path, cwd, "newer", "new one", 1_700_000_100)
 
     client = await client_factory()
-    await client.send({"type": "ccsockd.list_sessions", "id": "r1", "cwd": cwd})
-    reply = await client.wait_for(lambda e: e.get("type") == "ccsockd.sessions")
+    await client.send({"type": "blemeesd.list_sessions", "id": "r1", "cwd": cwd})
+    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
     ids = [s["session"] for s in reply["sessions"]]
     assert ids == ["newer", "older"]
     assert reply["sessions"][0]["preview"] == "new one"
@@ -358,17 +358,17 @@ async def test_list_sessions_flags_attached(
     client = await client_factory()
     await client.send(
         {
-            "type": "ccsockd.open",
+            "type": "blemeesd.open",
             "id": "r1",
             "session": "live",
             "tools": "",
             "cwd": cwd,
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "ccsockd.opened")
+    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
 
-    await client.send({"type": "ccsockd.list_sessions", "id": "r2", "cwd": cwd})
-    reply = await client.wait_for(lambda e: e.get("type") == "ccsockd.sessions")
+    await client.send({"type": "blemeesd.list_sessions", "id": "r2", "cwd": cwd})
+    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
     records = {s["session"]: s for s in reply["sessions"]}
     assert "live" in records
     assert records["live"]["attached"] is True

@@ -3,13 +3,13 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ccsock"
+name = "blemees"
 version = "0.1.0"
 description = "Headless Claude Code daemon exposing `claude -p` over a Unix socket."
-readme = "ccsock/README.md"
+readme = "blemees/README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "ccsock contributors" }]
+authors = [{ name = "blemees contributors" }]
 keywords = ["claude", "claude-code", "daemon", "unix-socket"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -25,7 +25,7 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-ccsockd = "ccsock.__main__:main"
+blemeesd = "blemees.__main__:main"
 
 [project.optional-dependencies]
 dev = [
@@ -34,7 +34,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["ccsock"]
+packages = ["blemees"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

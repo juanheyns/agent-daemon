@@ -1,4 +1,4 @@
-"""Configuration loading for ccsockd.
+"""Configuration loading for blemeesd.
 
 Precedence (highest first): CLI flag > env var > config file > default.
 Config file format is TOML (stdlib ``tomllib``). All fields optional.
@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_CONFIG_PATH = Path.home() / ".config" / "ccsockd" / "config.toml"
+DEFAULT_CONFIG_PATH = Path.home() / ".config" / "blemeesd" / "config.toml"
 
 
 @dataclasses.dataclass(slots=True)
@@ -42,11 +42,11 @@ class Config:
 def default_socket_path() -> str:
     xdg = os.environ.get("XDG_RUNTIME_DIR")
     if xdg:
-        return str(Path(xdg) / "ccsockd.sock")
+        return str(Path(xdg) / "blemeesd.sock")
     if sys.platform == "darwin":
-        return f"/tmp/ccsockd-{os.getuid()}.sock"
+        return f"/tmp/blemeesd-{os.getuid()}.sock"
     # Fallback for Linux without XDG_RUNTIME_DIR set.
-    return f"/tmp/ccsockd-{os.getuid()}.sock"
+    return f"/tmp/blemeesd-{os.getuid()}.sock"
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -58,14 +58,14 @@ def _load_toml(path: Path) -> dict[str, Any]:
 
 def _env_overrides() -> dict[str, Any]:
     mapping = {
-        "CCSOCKD_SOCKET": "socket_path",
-        "CCSOCKD_CLAUDE": "claude_bin",
-        "CCSOCKD_LOG_LEVEL": "log_level",
-        "CCSOCKD_LOG_FILE": "log_file",
-        "CCSOCKD_MAX_LINE": "max_line_bytes",
-        "CCSOCKD_IDLE_TIMEOUT": "idle_timeout_s",
-        "CCSOCKD_RING_BUFFER_SIZE": "ring_buffer_size",
-        "CCSOCKD_EVENT_LOG_DIR": "event_log_dir",
+        "BLEMEESD_SOCKET": "socket_path",
+        "BLEMEESD_CLAUDE": "claude_bin",
+        "BLEMEESD_LOG_LEVEL": "log_level",
+        "BLEMEESD_LOG_FILE": "log_file",
+        "BLEMEESD_MAX_LINE": "max_line_bytes",
+        "BLEMEESD_IDLE_TIMEOUT": "idle_timeout_s",
+        "BLEMEESD_RING_BUFFER_SIZE": "ring_buffer_size",
+        "BLEMEESD_EVENT_LOG_DIR": "event_log_dir",
     }
     out: dict[str, Any] = {}
     for env_name, field in mapping.items():
@@ -83,7 +83,7 @@ def _coerce(field: dataclasses.Field, value: Any) -> Any:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="ccsockd")
+    parser = argparse.ArgumentParser(prog="blemeesd")
     parser.add_argument("--socket", dest="socket_path", help="Unix socket path")
     parser.add_argument("--claude", dest="claude_bin", help="Path to the claude binary")
     parser.add_argument("--log-level", dest="log_level", help="debug|info|warning|error")

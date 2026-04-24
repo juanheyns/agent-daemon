@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from ccsock.errors import SessionBusyError
-from ccsock.logging import configure
-from ccsock.protocol import OpenMessage, build_claude_argv, build_user_stdin_line
-from ccsock.subprocess import (
+from blemees.errors import SessionBusyError
+from blemees.logging import configure
+from blemees.protocol import OpenMessage, build_claude_argv, build_user_stdin_line
+from blemees.subprocess import (
     ClaudeSubprocess,
     _argv_to_resume,
     list_session_files,
@@ -54,12 +54,12 @@ async def _drain_until_result(queue: asyncio.Queue, session: str) -> list[dict]:
     while True:
         evt = await asyncio.wait_for(queue.get(), timeout=5.0)
         events.append(evt)
-        if evt.get("type") == "result" and evt.get("session") == session:
+        if evt.get("type") == "claude.result" and evt.get("session") == session:
             return events
 
 
 async def test_normal_turn_produces_result(monkeypatch):
-    monkeypatch.setenv("CCSOCK_FAKE_MODE", "normal")
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", "normal")
     queue: asyncio.Queue = asyncio.Queue()
     logger = configure("error")
     proc = ClaudeSubprocess(
@@ -76,10 +76,10 @@ async def test_normal_turn_produces_result(monkeypatch):
         await proc.send_user_line(line)
         events = await _drain_until_result(queue, "s1")
         kinds = [e["type"] for e in events]
-        assert "system" in kinds
-        assert "stream_event" in kinds
-        assert "assistant" in kinds
-        assert events[-1]["type"] == "result"
+        assert "claude.system" in kinds
+        assert "claude.stream_event" in kinds
+        assert "claude.assistant" in kinds
+        assert events[-1]["type"] == "claude.result"
         assert events[-1]["session"] == "s1"
         assert proc.turn_active is False
     finally:
@@ -87,7 +87,7 @@ async def test_normal_turn_produces_result(monkeypatch):
 
 
 async def test_session_busy_while_turn_in_flight(monkeypatch):
-    monkeypatch.setenv("CCSOCK_FAKE_MODE", "slow")
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", "slow")
     queue: asyncio.Queue = asyncio.Queue()
     logger = configure("error")
     proc = ClaudeSubprocess(
@@ -103,7 +103,7 @@ async def test_session_busy_while_turn_in_flight(monkeypatch):
         # Wait for at least one delta so we know the turn is live.
         while True:
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
-            if evt.get("type") == "stream_event":
+            if evt.get("type") == "claude.stream_event":
                 break
         with pytest.raises(SessionBusyError):
             await proc.send_user_line(
@@ -114,7 +114,7 @@ async def test_session_busy_while_turn_in_flight(monkeypatch):
 
 
 async def test_interrupt_kills_and_respawns_with_resume(monkeypatch):
-    monkeypatch.setenv("CCSOCK_FAKE_MODE", "slow")
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", "slow")
     queue: asyncio.Queue = asyncio.Queue()
     logger = configure("error")
     proc = ClaudeSubprocess(
@@ -130,7 +130,7 @@ async def test_interrupt_kills_and_respawns_with_resume(monkeypatch):
         # Wait for streaming to start.
         while True:
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
-            if evt.get("type") == "stream_event":
+            if evt.get("type") == "claude.stream_event":
                 break
         assert proc.turn_active is True
         did_kill = await proc.interrupt()
@@ -141,13 +141,13 @@ async def test_interrupt_kills_and_respawns_with_resume(monkeypatch):
         assert proc.running is True
 
         # Subsequent turn works (switch mode to normal for a clean reply).
-        monkeypatch.setenv("CCSOCK_FAKE_MODE", "normal")
+        monkeypatch.setenv("BLEMEES_FAKE_MODE", "normal")
     finally:
         await proc.close()
 
 
 async def test_interrupt_noop_when_idle(monkeypatch):
-    monkeypatch.setenv("CCSOCK_FAKE_MODE", "normal")
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", "normal")
     queue: asyncio.Queue = asyncio.Queue()
     logger = configure("error")
     proc = ClaudeSubprocess(
@@ -166,7 +166,7 @@ async def test_interrupt_noop_when_idle(monkeypatch):
 
 
 async def test_crash_surfaces_claude_crashed(monkeypatch):
-    monkeypatch.setenv("CCSOCK_FAKE_MODE", "crash")
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", "crash")
     queue: asyncio.Queue = asyncio.Queue()
     logger = configure("error")
     proc = ClaudeSubprocess(
@@ -182,7 +182,7 @@ async def test_crash_surfaces_claude_crashed(monkeypatch):
         saw_error = False
         for _ in range(20):
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
-            if evt.get("type") == "ccsockd.error" and evt.get("code") == "claude_crashed":
+            if evt.get("type") == "blemeesd.error" and evt.get("code") == "claude_crashed":
                 saw_error = True
                 break
         assert saw_error, "never saw claude_crashed"
@@ -191,7 +191,7 @@ async def test_crash_surfaces_claude_crashed(monkeypatch):
 
 
 async def test_oauth_detection(monkeypatch):
-    monkeypatch.setenv("CCSOCK_FAKE_MODE", "oauth")
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", "oauth")
     queue: asyncio.Queue = asyncio.Queue()
     logger = configure("error")
     proc = ClaudeSubprocess(

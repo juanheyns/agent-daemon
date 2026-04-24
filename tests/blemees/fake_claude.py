@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stand-in for ``claude`` used by the mock-claude tests.
 
-The test harness writes the desired behaviour into the ``CCSOCK_FAKE_MODE``
+The test harness writes the desired behaviour into the ``BLEMEES_FAKE_MODE``
 environment variable before spawning. Modes:
 
 * ``normal``    → for each stdin line, emit a ``system init`` event, a
@@ -13,7 +13,7 @@ environment variable before spawning. Modes:
 * ``oauth``     → emit an OAuth-style error to stderr, exit 1.
 * ``echo``      → echo whatever text is in the inbound message.
 
-The fake records its argv to ``$CCSOCK_FAKE_ARGV_FILE`` (one JSON line) so
+The fake records its argv to ``$BLEMEES_FAKE_ARGV_FILE`` (one JSON line) so
 tests can assert flag mapping.
 """
 
@@ -26,7 +26,7 @@ import time
 
 
 def _write_argv_trace() -> None:
-    path = os.environ.get("CCSOCK_FAKE_ARGV_FILE")
+    path = os.environ.get("BLEMEES_FAKE_ARGV_FILE")
     if not path:
         return
     with open(path, "a", encoding="utf-8") as fh:
@@ -78,7 +78,7 @@ def main() -> int:
 
     _write_argv_trace()
 
-    mode = os.environ.get("CCSOCK_FAKE_MODE", "normal")
+    mode = os.environ.get("BLEMEES_FAKE_MODE", "normal")
     session = _session_id_from_argv()
 
     # system init event at startup

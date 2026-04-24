@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for ccsock tests."""
+"""Shared pytest fixtures for blemees tests."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from typing import Any, AsyncIterator
 import pytest
 import pytest_asyncio
 
-from ccsock import PROTOCOL_VERSION
-from ccsock.config import Config
-from ccsock.daemon import Daemon
-from ccsock.logging import configure
+from blemees import PROTOCOL_VERSION
+from blemees.config import Config
+from blemees.daemon import Daemon
+from blemees.logging import configure
 
 
 FAKE_CLAUDE = Path(__file__).parent / "fake_claude.py"
@@ -39,7 +39,7 @@ def argv_trace_path(tmp_path):
 @pytest.fixture
 def fake_mode(monkeypatch):
     def _set(mode: str) -> None:
-        monkeypatch.setenv("CCSOCK_FAKE_MODE", mode)
+        monkeypatch.setenv("BLEMEES_FAKE_MODE", mode)
     return _set
 
 
@@ -52,10 +52,10 @@ async def daemon_and_socket(tmp_path, argv_trace_path, monkeypatch, request):
     Tests may parametrize extra config via ``indirect``-style attrs on the
     request's ``node.stash`` or by reading the ``daemon_config`` fixture.
     """
-    monkeypatch.setenv("CCSOCK_FAKE_ARGV_FILE", str(argv_trace_path))
-    monkeypatch.setenv("CCSOCK_FAKE_MODE", os.environ.get("CCSOCK_FAKE_MODE", "normal"))
+    monkeypatch.setenv("BLEMEES_FAKE_ARGV_FILE", str(argv_trace_path))
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", os.environ.get("BLEMEES_FAKE_MODE", "normal"))
 
-    socket_path = tmp_path / "ccsockd.sock"
+    socket_path = tmp_path / "blemeesd.sock"
     overrides = getattr(request, "param", None) or {}
     cfg = Config(
         socket_path=str(socket_path),
@@ -159,10 +159,10 @@ async def client_factory(daemon_and_socket):
         reader, writer = await asyncio.open_unix_connection(socket_path)
         c = _StreamClient(reader, writer)
         await c.send(
-            {"type": "ccsockd.hello", "client": "test/0", "protocol": PROTOCOL_VERSION}
+            {"type": "blemeesd.hello", "client": "test/0", "protocol": PROTOCOL_VERSION}
         )
         ack = await c.recv()
-        assert ack["type"] == "ccsockd.hello_ack", ack
+        assert ack["type"] == "blemeesd.hello_ack", ack
         created.append(c)
         return c
 

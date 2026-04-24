@@ -17,10 +17,10 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
-from ccsock import PROTOCOL_VERSION
-from ccsock.config import Config
-from ccsock.daemon import Daemon
-from ccsock.logging import configure
+from blemees import PROTOCOL_VERSION
+from blemees.config import Config
+from blemees.daemon import Daemon
+from blemees.logging import configure
 
 
 CLAUDE = shutil.which("claude")
@@ -39,7 +39,7 @@ _need_claude()
 
 @pytest_asyncio.fixture
 async def real_daemon(tmp_path):
-    socket_path = tmp_path / "ccsockd.sock"
+    socket_path = tmp_path / "blemeesd.sock"
     cfg = Config(socket_path=str(socket_path), claude_bin=CLAUDE)
     logger = configure("error")
     daemon = Daemon(cfg, logger)
@@ -56,12 +56,12 @@ async def real_daemon(tmp_path):
 
 
 async def _client(socket_path: str):
-    from tests.ccsock.conftest import _StreamClient  # reuse helper
+    from tests.blemees.conftest import _StreamClient  # reuse helper
     reader, writer = await asyncio.open_unix_connection(socket_path)
     c = _StreamClient(reader, writer)
-    await c.send({"type": "ccsockd.hello", "client": "e2e/0", "protocol": PROTOCOL_VERSION})
+    await c.send({"type": "blemeesd.hello", "client": "e2e/0", "protocol": PROTOCOL_VERSION})
     ack = await c.recv()
-    assert ack["type"] == "ccsockd.hello_ack"
+    assert ack["type"] == "blemeesd.hello_ack"
     return c
 
 
@@ -71,7 +71,7 @@ async def test_real_claude_turn_produces_result(real_daemon):
         session = str(uuid.uuid4())
         await c.send(
             {
-                "type": "ccsockd.open",
+                "type": "blemeesd.open",
                 "id": "r1",
                 "session": session,
                 "model": "haiku",
@@ -79,10 +79,10 @@ async def test_real_claude_turn_produces_result(real_daemon):
                 "permission_mode": "bypassPermissions",
             }
         )
-        await c.wait_for(lambda e: e.get("type") == "ccsockd.opened", timeout=30.0)
-        await c.send({"type": "ccsockd.user", "session": session, "text": "Say OK."})
+        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.send({"type": "blemeesd.user", "session": session, "text": "Say OK."})
         res = await c.wait_for(
-            lambda e: e.get("type") == "result" and e.get("session") == session,
+            lambda e: e.get("type") == "claude.result" and e.get("session") == session,
             timeout=60.0,
         )
         assert res["subtype"] in {"success", "error_max_turns", "error_during_execution"}
@@ -96,7 +96,7 @@ async def test_real_claude_resume_preserves_context(real_daemon):
         session = str(uuid.uuid4())
         await c.send(
             {
-                "type": "ccsockd.open",
+                "type": "blemeesd.open",
                 "id": "r1",
                 "session": session,
                 "model": "haiku",
@@ -104,26 +104,26 @@ async def test_real_claude_resume_preserves_context(real_daemon):
                 "permission_mode": "bypassPermissions",
             }
         )
-        await c.wait_for(lambda e: e.get("type") == "ccsockd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
         await c.send(
-            {"type": "ccsockd.user", "session": session, "text": "Remember the number 17."}
+            {"type": "blemeesd.user", "session": session, "text": "Remember the number 17."}
         )
         await c.wait_for(
-            lambda e: e.get("type") == "result" and e.get("session") == session,
+            lambda e: e.get("type") == "claude.result" and e.get("session") == session,
             timeout=60.0,
         )
         await c.send(
-            {"type": "ccsockd.user", "session": session, "text": "What number did I ask you to remember? Answer with just the number."}
+            {"type": "blemeesd.user", "session": session, "text": "What number did I ask you to remember? Answer with just the number."}
         )
         collected = await c.wait_for(
-            lambda e: e.get("type") == "result" and e.get("session") == session,
+            lambda e: e.get("type") == "claude.result" and e.get("session") == session,
             collect=True,
             timeout=60.0,
         )
         # Concatenate any text from assistant messages seen.
         text = ""
         for evt in collected:
-            if evt.get("type") == "assistant":
+            if evt.get("type") == "claude.assistant":
                 for block in evt.get("message", {}).get("content", []):
                     if isinstance(block, dict) and block.get("type") == "text":
                         text += block.get("text", "")
@@ -138,7 +138,7 @@ async def test_real_claude_interrupt_then_continue(real_daemon):
         session = str(uuid.uuid4())
         await c.send(
             {
-                "type": "ccsockd.open",
+                "type": "blemeesd.open",
                 "id": "r1",
                 "session": session,
                 "model": "haiku",
@@ -146,25 +146,25 @@ async def test_real_claude_interrupt_then_continue(real_daemon):
                 "permission_mode": "bypassPermissions",
             }
         )
-        await c.wait_for(lambda e: e.get("type") == "ccsockd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
         await c.send(
             {
-                "type": "ccsockd.user",
+                "type": "blemeesd.user",
                 "session": session,
                 "text": "Count slowly from 1 to 200, one number per line.",
             }
         )
         await c.wait_for(
-            lambda e: e.get("type") == "stream_event", timeout=60.0
+            lambda e: e.get("type") == "claude.stream_event", timeout=60.0
         )
-        await c.send({"type": "ccsockd.interrupt", "session": session})
+        await c.send({"type": "blemeesd.interrupt", "session": session})
         await c.wait_for(
-            lambda e: e.get("type") == "ccsockd.interrupted", timeout=10.0
+            lambda e: e.get("type") == "blemeesd.interrupted", timeout=10.0
         )
         # Subsequent turn still works.
-        await c.send({"type": "ccsockd.user", "session": session, "text": "Say OK."})
+        await c.send({"type": "blemeesd.user", "session": session, "text": "Say OK."})
         await c.wait_for(
-            lambda e: e.get("type") == "result" and e.get("session") == session,
+            lambda e: e.get("type") == "claude.result" and e.get("session") == session,
             timeout=60.0,
         )
     finally:
