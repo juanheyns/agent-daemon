@@ -132,7 +132,7 @@ class BlemeesClient:
         """Return past sessions for ``cwd`` (on-disk + currently attached).
 
         Results are sorted newest-first and each record has at least
-        ``session`` and ``attached``; on-disk records also carry ``mtime_ms``,
+        ``session_id`` and ``attached``; on-disk records also carry ``mtime_ms``,
         ``size``, and an optional ``preview`` of the first user message.
         """
         self._next_req += 1
