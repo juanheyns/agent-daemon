@@ -56,10 +56,10 @@ asyncio.run(main())
 
 ## Documentation
 
-- **[Protocol & architecture spec](spec.html)** — the full README/spec,
+- **[Protocol & architecture spec](spec)** — the full README/spec,
   including wire format, session lifecycle, seq/ring/replay, shutdown
   semantics, and error codes.
-- **[JSON Schemas](schemas.html)** — Draft 2020-12 schemas under
+- **[JSON Schemas](schemas)** — Draft 2020-12 schemas under
   `schemas/` as the machine-readable contract.
 - **[GitHub repository](https://github.com/blemees/blemees-daemon)** —
   source, issues, releases.
