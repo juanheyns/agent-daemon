@@ -77,6 +77,119 @@ brew services start blemees
 The Homebrew formula ships a service stanza so the daemon runs at login
 without you touching launchd by hand.
 
+### Service lifecycle
+
+`blemeesd` is a **per-user** daemon by design — one instance per UID, one
+Claude account per instance, socket pinned to that UID. Every install path
+above registers it with a per-user service manager, not a system one.
+
+**macOS — LaunchAgent.** `brew services start blemees` writes
+`~/Library/LaunchAgents/homebrew.mxcl.blemees.plist` and loads it into your
+GUI session via `launchctl`. Manual install writes
+`~/Library/LaunchAgents/com.blemees.blemeesd.plist`. Either way it:
+
+- starts at login, restarts on crash (`KeepAlive`),
+- stops at logout (a power cycle with no login leaves it off),
+- runs as you, so `~/.claude/` creds and session logs are yours.
+
+Socket: `/tmp/blemeesd-<uid>.sock`.
+Inspect: `brew services list`, `launchctl list | grep blemees`,
+`tail -f "$(brew --prefix)/var/log/blemees/blemeesd.err.log"`.
+
+**Linux — systemd `--user` unit.** `brew services start blemees` writes
+`~/.config/systemd/user/homebrew.blemees.service`. Manual install writes
+`~/.config/systemd/user/blemeesd.service`. Either way it:
+
+- starts when your user manager starts (first login after boot),
+- stops when your last session ends (SSH out, logout),
+- runs as you.
+
+Socket: `$XDG_RUNTIME_DIR/blemeesd.sock` (= `/run/user/<uid>/blemeesd.sock`).
+Inspect: `systemctl --user status blemeesd`, `journalctl --user -u blemeesd -f`.
+
+### Client socket resolution
+
+Clients using `BlemeesClient.connect()` (and the daemon itself for its own
+default) resolve the socket path in this order of precedence, stopping at
+the first match:
+
+1. `$BLEMEESD_SOCKET` — explicit override, wins everywhere.
+2. `$XDG_RUNTIME_DIR/blemeesd.sock` — typical on Linux user sessions.
+3. `/tmp/blemeesd-<uid>.sock` — macOS and Linux without XDG.
+
+Only set `BLEMEESD_SOCKET` in the client's environment when the daemon
+was started with a non-default path (e.g. via `blemeesd --socket …`).
+
+### Running at boot (escape hatch)
+
+You probably do not want this — `claude` runs with whatever privileges the
+daemon has, and a broader trust boundary means a bigger blast radius. If
+you need it anyway (e.g. headless server, unattended box), these are the
+supported paths. Both keep the daemon running as **one named user**; do
+not run it as root.
+
+**Linux — `loginctl enable-linger`.** Single flag, no code or unit changes:
+
+```bash
+sudo loginctl enable-linger "$USER"
+```
+
+systemd starts your user manager at boot and keeps your `--user` units
+alive regardless of login state. Undo with `disable-linger`.
+
+**macOS — hand-rolled LaunchDaemon with `UserName`.** There is no
+`enable-linger` equivalent. `sudo brew services start blemees` *does*
+produce a LaunchDaemon, but it runs as **root** — do not use it.
+Instead, stop the user-scope service and install a LaunchDaemon that
+drops to your user at launch:
+
+```bash
+brew services stop blemees
+```
+
+Write `/Library/LaunchDaemons/com.blemees.blemeesd.plist` (owned
+`root:wheel`, mode `0644`):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>            <string>com.blemees.blemeesd</string>
+  <key>UserName</key>         <string>YOUR_USERNAME</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/blemeesd</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key> <string>/Users/YOUR_USERNAME</string>
+    <key>PATH</key> <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>RunAtLoad</key>        <true/>
+  <key>KeepAlive</key>        <true/>
+  <key>StandardOutPath</key>  <string>/Users/YOUR_USERNAME/Library/Logs/blemees/blemeesd.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/YOUR_USERNAME/Library/Logs/blemees/blemeesd.err.log</string>
+</dict>
+</plist>
+```
+
+Load and unload:
+
+```bash
+sudo launchctl bootstrap system /Library/LaunchDaemons/com.blemees.blemeesd.plist
+sudo launchctl bootout   system /Library/LaunchDaemons/com.blemees.blemeesd.plist
+```
+
+Gotchas:
+
+- `HOME` **must** be set in `EnvironmentVariables`; LaunchDaemons start
+  with an empty env and `~/.claude/` lookups will fail otherwise.
+- On FileVault-encrypted disks, "at boot" actually means "at first
+  unlock of the disk at boot" — not truly pre-login.
+- Intel Macs: use `/usr/local/bin` instead of `/opt/homebrew/bin`.
+
 ---
 
 ## 1. Overview
@@ -727,11 +840,6 @@ these files. On `close` with `delete: true`, it removes the specific file.
 Optional startup housekeeping: remove session files older than
 `SESSION_RETENTION_DAYS` (default 7). Opt-in via config.
 
-### 6.6 Warm pool (deferred)
-
-Not in v0.1. Future optimization: maintain a pre-spawned `claude -p` per
-common model for instant `open`. Cost: one idle subprocess per hot model.
-
 ---
 
 ## 7. Security
@@ -784,7 +892,7 @@ v0.1 runs in the foreground only. Use systemd/launchd for background.
 
 ```ini
 [Unit]
-Description=Headless Agent daemon
+Description=Headless agent daemon
 After=default.target
 
 [Service]
@@ -911,8 +1019,6 @@ Acceptance targets on an ordinary dev machine:
 - Cold open → first event ≤ 1.5 s.
 - Warm user → first event ≤ 0.5 s.
 - Resume open → first event ≤ 1.5 s.
-
-These mirror the Hermes spike numbers (0.98 s cold, ~0.8 s resume).
 
 ---
 

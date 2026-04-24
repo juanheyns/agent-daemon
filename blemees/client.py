@@ -24,6 +24,9 @@ from . import PROTOCOL_VERSION
 
 
 def default_socket_path() -> str:
+    env = os.environ.get("BLEMEESD_SOCKET")
+    if env:
+        return env
     xdg = os.environ.get("XDG_RUNTIME_DIR")
     if xdg:
         return str(Path(xdg) / "blemeesd.sock")
