@@ -1,0 +1,55 @@
+name: Docs sync
+
+# Keeps docs/spec.md and docs/schemas.md in sync with their sources
+# (README.md and schemas/README.md respectively) so GitHub Pages always
+# publishes the current protocol.
+#
+# GitHub Pages itself reads from the docs/ folder on the main branch —
+# enable it once under Settings → Pages (Source: Deploy from a branch,
+# Branch: main, Folder: /docs). Everything after that is automatic.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "README.md"
+      - "schemas/README.md"
+      - ".github/workflows/docs-sync.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Re-generate docs/spec.md from README.md
+        run: |
+          {
+            printf -- '---\ntitle: Protocol spec\nnav_order: 2\npermalink: /spec/\n---\n\n'
+            printf -- '<!-- Auto-synced from README.md by .github/workflows/docs-sync.yml. Edit the root README. -->\n\n'
+            cat README.md
+          } > docs/spec.md
+
+      - name: Re-generate docs/schemas.md from schemas/README.md
+        run: |
+          {
+            printf -- '---\ntitle: JSON Schemas\nnav_order: 3\npermalink: /schemas/\n---\n\n'
+            printf -- '<!-- Auto-synced from schemas/README.md by .github/workflows/docs-sync.yml. -->\n\n'
+            cat schemas/README.md
+          } > docs/schemas.md
+
+      - name: Commit changes (if any)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [[ -n "$(git status --porcelain docs/)" ]]; then
+            git add docs/
+            git commit -m "docs: sync spec + schemas from source"
+            git push
+          else
+            echo "docs already in sync"
+          fi

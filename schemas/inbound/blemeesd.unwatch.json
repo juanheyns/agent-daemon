@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/inbound/blemeesd.unwatch.json",
+  "title": "blemeesd.unwatch",
+  "description": "Cancel a prior blemeesd.watch. No-op if the connection wasn't watching (reply carries was_watching:false). Watchers are also automatically removed when the connection closes.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.unwatch" },
+    "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" }
+  },
+  "required": ["type", "session_id"],
+  "additionalProperties": false
+}

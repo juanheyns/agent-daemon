@@ -1,0 +1,20 @@
+title: blemeesd
+description: Headless Claude Code daemon exposing `claude -p` over a Unix socket.
+remote_theme: pages-themes/midnight@v0.2.0
+plugins:
+  - jekyll-remote-theme
+  - jekyll-relative-links
+  - jekyll-seo-tag
+
+# Serve plain .md as pretty links.
+permalink: pretty
+
+# We don't want the site to try to process notebook-style files or package
+# internals — only the markdown we copy under docs/.
+exclude:
+  - Gemfile
+  - Gemfile.lock
+
+show_downloads: true
+github:
+  repository_url: https://github.com/juanheyns/agent-daemon

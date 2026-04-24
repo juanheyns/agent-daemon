@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/outbound/blemeesd.watching.json",
+  "title": "blemeesd.watching",
+  "description": "Ack for blemeesd.watch. last_seq is the session's highest seq at subscribe time, matching blemeesd.opened semantics.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.watching" },
+    "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "last_seq": { "type": "integer", "minimum": 0 }
+  },
+  "required": ["type", "session_id"],
+  "additionalProperties": true
+}

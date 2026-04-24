@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/outbound/blemeesd.pong.json",
+  "title": "blemeesd.pong",
+  "description": "Reply to blemeesd.ping. Echoes the request's id and any data payload.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.pong" },
+    "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
+    "data": {}
+  },
+  "required": ["type"],
+  "additionalProperties": true
+}

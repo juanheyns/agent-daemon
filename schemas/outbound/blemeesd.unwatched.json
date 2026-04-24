@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/outbound/blemeesd.unwatched.json",
+  "title": "blemeesd.unwatched",
+  "description": "Reply to blemeesd.unwatch. was_watching indicates whether this connection actually had a subscription to remove.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.unwatched" },
+    "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
+    "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
+    "was_watching": { "type": "boolean" }
+  },
+  "required": ["type", "session_id"],
+  "additionalProperties": true
+}

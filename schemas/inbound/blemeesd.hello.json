@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blemees/schemas/inbound/blemeesd.hello.json",
+  "title": "blemeesd.hello",
+  "description": "First frame on every connection. Must arrive before any other frame.",
+  "type": "object",
+  "properties": {
+    "type": { "const": "blemeesd.hello" },
+    "protocol": {
+      "type": "string",
+      "description": "Protocol version. v0.1 speaks `blemees/1`.",
+      "const": "blemees/1"
+    },
+    "client": {
+      "type": "string",
+      "description": "Free-form client identifier (name/version). Informational."
+    }
+  },
+  "required": ["type", "protocol"],
+  "additionalProperties": false
+}
