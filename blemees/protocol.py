@@ -298,14 +298,14 @@ def parse_user(obj: dict[str, Any]) -> UserMessage:
 def parse_interrupt(obj: dict[str, Any]) -> InterruptMessage:
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
-        raise ProtocolError("interrupt requires 'session'")
+        raise ProtocolError("interrupt requires 'session_id'")
     return InterruptMessage(session_id=session_id)
 
 
 def parse_close(obj: dict[str, Any]) -> CloseMessage:
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
-        raise ProtocolError("close requires 'session'")
+        raise ProtocolError("close requires 'session_id'")
     delete = bool(obj.get("delete", False))
     req_id = obj.get("id")
     if req_id is not None and not isinstance(req_id, str):
