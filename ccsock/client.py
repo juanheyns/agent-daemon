@@ -41,6 +41,7 @@ class Session:
         self.session_id = session_id
         self._queue: asyncio.Queue = asyncio.Queue()
         self._closed = False
+        self.last_seq: int = 0  # highest seq observed; pass into open(resume)
 
     async def send_user(self, text: str | None = None, *, content: list | None = None) -> None:
         frame: dict[str, Any] = {"type": "ccsockd.user", "session": self.session_id}
@@ -69,6 +70,9 @@ class Session:
             yield evt
 
     def _deliver(self, evt: dict[str, Any]) -> None:
+        seq = evt.get("seq")
+        if isinstance(seq, int) and seq > self.last_seq:
+            self.last_seq = seq
         self._queue.put_nowait(evt)
 
     def _terminate(self) -> None:

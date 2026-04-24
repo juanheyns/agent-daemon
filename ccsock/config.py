@@ -32,6 +32,11 @@ class Config:
     max_concurrent_sessions: int = 64
     stderr_rate_lines: int = 50
     stderr_rate_window_s: int = 10
+    # Per-session event-stream buffering.
+    ring_buffer_size: int = 1024
+    # When set, outbound frames are appended to ``<event_log_dir>/<session>.jsonl``.
+    # Survives daemon restarts; seeds the ring buffer on reopen. Opt-in.
+    event_log_dir: str | None = None
 
 
 def default_socket_path() -> str:
@@ -59,6 +64,8 @@ def _env_overrides() -> dict[str, Any]:
         "CCSOCKD_LOG_FILE": "log_file",
         "CCSOCKD_MAX_LINE": "max_line_bytes",
         "CCSOCKD_IDLE_TIMEOUT": "idle_timeout_s",
+        "CCSOCKD_RING_BUFFER_SIZE": "ring_buffer_size",
+        "CCSOCKD_EVENT_LOG_DIR": "event_log_dir",
     }
     out: dict[str, Any] = {}
     for env_name, field in mapping.items():

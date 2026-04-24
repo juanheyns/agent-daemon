@@ -124,6 +124,38 @@ List past sessions for a project directory (parity with interactive
 another connection (or your own). Records without `mtime_ms` are live
 sessions whose transcript hasn't been written yet — still resumable.
 
+### Disconnect-resilient streaming
+
+Every outbound frame the daemon emits carries a monotonic per-session
+`seq`. When a client disconnects with a turn in flight:
+
+* The subprocess is **not killed immediately** — it runs to the next
+  `result` event so the transcript closes cleanly, then exits.
+* Events continue to accumulate in a per-session ring buffer (default
+  1024 entries; configurable via `CCSOCKD_RING_BUFFER_SIZE`).
+* Optionally they are also persisted to `event_log_dir/<session>.jsonl`
+  (opt-in via `CCSOCKD_EVENT_LOG_DIR`) so replay survives daemon
+  restarts.
+
+On reconnect, the client passes `last_seen_seq` on `ccsockd.open` with
+`resume: true`:
+
+```json
+{"type":"ccsockd.open","id":"r1","session":"s1","resume":true,"last_seen_seq":42}
+```
+
+The daemon replays every buffered frame with `seq > 42` before resuming
+live delivery. If the ring has rolled over past the requested seq you
+receive a one-shot `ccsockd.replay_gap` frame first:
+
+```json
+{"type":"ccsockd.replay_gap","session":"s1","since_seq":42,"first_available_seq":71}
+```
+
+`ccsockd.opened` carries `last_seq` (the highest seq currently known for
+the session), so clients can tell immediately whether they need to
+replay.
+
 Full details, flag mapping, and error codes: see `ccsockd-spec.md`.
 
 ---

@@ -39,7 +39,7 @@ async def test_detach_marks_idle_time():
     table = SessionTable(idle_timeout_s=60, max_concurrent=8)
     sess = Session(session_id="s1", open_msg=_open_msg(), cwd=None, connection_id=42)
     await table.register(sess)
-    await table.detach("s1")
+    await table.detach_soft("s1")
     again = table.get("s1")
     assert again.connection_id is None
     assert again.detached_at is not None
@@ -51,7 +51,7 @@ async def test_reap_idle_removes_expired_only():
     b = Session(session_id="b", open_msg=_open_msg("b"), cwd=None, connection_id=2)
     await table.register(a)
     await table.register(b)
-    await table.detach("a")
+    await table.detach_soft("a")
     # Backdate detachment so the reaper considers it expired.
     import time
     table.get("a").detached_at = time.monotonic() - 2.0
@@ -76,8 +76,13 @@ async def test_detach_all_for_connection():
 async def test_reattach_clears_idle_time():
     table = SessionTable(idle_timeout_s=60, max_concurrent=8)
     await table.register(Session(session_id="s1", open_msg=_open_msg(), cwd=None, connection_id=1))
-    await table.detach("s1")
-    sess = await table.attach_existing("s1", connection_id=7)
+    await table.detach_soft("s1")
+
+    async def writer(_frame):
+        pass
+
+    sess = table.get("s1")
+    await sess.attach(connection_id=7, writer=writer)
     assert sess.connection_id == 7
     assert sess.detached_at is None
 

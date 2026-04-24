@@ -72,7 +72,7 @@ class ClaudeSubprocess:
         session_id: str,
         argv: list[str],
         cwd: str | None,
-        event_queue: asyncio.Queue,
+        on_event: Callable[[dict], Awaitable[None]],
         logger,
         stderr_rate_lines: int = 50,
         stderr_rate_window_s: float = 10.0,
@@ -81,7 +81,7 @@ class ClaudeSubprocess:
         self.session_id = session_id
         self._argv = argv
         self._cwd = cwd
-        self._queue = event_queue
+        self._on_event = on_event
         self._log = logger.bind(session_id=session_id)
         self._stderr_limit = _StderrRateLimiter(stderr_rate_lines, stderr_rate_window_s)
         self._on_exit = on_exit
@@ -304,9 +304,10 @@ class ClaudeSubprocess:
     # ------------------------------------------------------------------
 
     async def _enqueue(self, frame: dict[str, Any]) -> None:
-        # NOTE: the connection dispatcher enforces the bounded-queue / 30 s
-        # slow_consumer policy by watching this same queue.
-        await self._queue.put(frame)
+        # The Session is the authoritative event dispatcher: it tags with a
+        # monotonic seq, ring-buffers, (optionally) writes to the durable
+        # log, and pushes to whatever writer is currently attached.
+        await self._on_event(frame)
 
     @property
     def running(self) -> bool:

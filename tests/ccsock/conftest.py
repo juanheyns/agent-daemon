@@ -44,20 +44,26 @@ def fake_mode(monkeypatch):
 
 
 @pytest_asyncio.fixture
-async def daemon_and_socket(tmp_path, argv_trace_path, monkeypatch):
+async def daemon_and_socket(tmp_path, argv_trace_path, monkeypatch, request):
     """Start a daemon bound to a tmp socket using the fake claude stub.
 
     Yields ``(Daemon, socket_path)``. The daemon is shut down on teardown.
+
+    Tests may parametrize extra config via ``indirect``-style attrs on the
+    request's ``node.stash`` or by reading the ``daemon_config`` fixture.
     """
     monkeypatch.setenv("CCSOCK_FAKE_ARGV_FILE", str(argv_trace_path))
     monkeypatch.setenv("CCSOCK_FAKE_MODE", os.environ.get("CCSOCK_FAKE_MODE", "normal"))
 
     socket_path = tmp_path / "ccsockd.sock"
+    overrides = getattr(request, "param", None) or {}
     cfg = Config(
         socket_path=str(socket_path),
         claude_bin=f"{sys.executable}",  # will be overridden below
         idle_timeout_s=60,
         max_concurrent_sessions=8,
+        ring_buffer_size=overrides.get("ring_buffer_size", 1024),
+        event_log_dir=overrides.get("event_log_dir"),
     )
     # We can't spawn "python fake_claude.py" with create_subprocess_exec using
     # a single binary; use the fake script's shebang by making the "binary"

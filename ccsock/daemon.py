@@ -297,43 +297,26 @@ class Connection:
             raise SessionExistsError(msg.session)
 
         if msg.resume:
-            sess: Session
             if existing is not None:
-                # Reattach detached session, reuse recorded open_msg for consistency.
-                if existing.subprocess is not None and existing.subprocess.running:
-                    existing.connection_id = self.id
-                    existing.detached_at = None
-                    sess = existing
-                else:
-                    existing.connection_id = self.id
-                    existing.detached_at = None
-                    existing.open_msg = msg  # update flags on reattach
-                    sess = existing
+                existing.open_msg = msg  # refresh flags on reattach
+                sess = existing
             else:
-                sess = Session(
-                    session_id=msg.session,
-                    open_msg=msg,
-                    cwd=msg.fields.get("cwd"),
-                    connection_id=self.id,
-                )
+                sess = self._sessions.new_session(msg)
                 await self._sessions.register(sess)
         else:
-            sess = Session(
-                session_id=msg.session,
-                open_msg=msg,
-                cwd=msg.fields.get("cwd"),
-                connection_id=self.id,
-            )
+            sess = self._sessions.new_session(msg)
             await self._sessions.register(sess)
 
-        # (Re)spawn the subprocess if not already running.
+        # (Re)spawn the subprocess first so we have a pid for the ack. Any
+        # events the child emits before we attach buffer into the session's
+        # ring and get delivered below.
         if sess.subprocess is None or not sess.subprocess.running:
             argv = build_claude_argv(self._config.claude_bin, msg, for_resume=msg.resume)
             proc = ClaudeSubprocess(
                 session_id=msg.session,
                 argv=argv,
                 cwd=msg.fields.get("cwd"),
-                event_queue=self._queue,  # type: ignore[arg-type]
+                on_event=sess.on_event,
                 logger=self._log,
                 stderr_rate_lines=self._config.stderr_rate_lines,
                 stderr_rate_window_s=self._config.stderr_rate_window_s,
@@ -349,19 +332,35 @@ class Connection:
             sess.subprocess = proc
 
         self._owned_sessions.add(msg.session)
-        self._log.info(
-            "session.open",
-            session_id=msg.session,
-            resume=msg.resume,
-            model=msg.fields.get("model"),
-        )
+
+        # Send ack before the event stream so clients can match the reply
+        # before they start consuming (possibly replayed) frames.
         await self._emit_frame(
             {
                 "type": "ccsockd.opened",
                 "id": msg.id,
                 "session": msg.session,
                 "subprocess_pid": sess.subprocess.pid,
+                "last_seq": sess.seq,
             }
+        )
+
+        # If the client asked for replay we honour it now; otherwise the
+        # attach just wires live delivery and any frames queued since spawn
+        # flow through immediately via the ring → writer path.
+        replay = await sess.attach(
+            self.id,
+            self._enqueue_to_writer,
+            last_seen_seq=(
+                msg.last_seen_seq if msg.last_seen_seq is not None else 0
+            ),
+        )
+        self._log.info(
+            "session.open",
+            session_id=msg.session,
+            resume=msg.resume,
+            replayed=replay.get("replayed", 0),
+            model=msg.fields.get("model"),
         )
 
     async def _handle_user(self, msg) -> None:
@@ -375,7 +374,7 @@ class Connection:
                 session_id=sess.session_id,
                 argv=new_argv,
                 cwd=sess.cwd,
-                event_queue=self._queue,  # type: ignore[arg-type]
+                on_event=sess.on_event,
                 logger=self._log,
                 stderr_rate_lines=self._config.stderr_rate_lines,
                 stderr_rate_window_s=self._config.stderr_rate_window_s,
@@ -494,6 +493,15 @@ class Connection:
             return
         await self._queue.put(frame)
 
+    async def _enqueue_to_writer(self, frame: dict[str, Any]) -> None:
+        """Writer callback handed to :meth:`Session.attach`.
+
+        Sessions push tagged (``seq``-carrying) frames here. We treat them
+        identically to daemon-originated frames for backpressure and
+        slow-consumer purposes.
+        """
+        await self._emit_frame(frame)
+
     async def _emit_error(
         self,
         code: str,
@@ -567,6 +575,8 @@ class Daemon:
         self._sessions = SessionTable(
             idle_timeout_s=config.idle_timeout_s,
             max_concurrent=config.max_concurrent_sessions,
+            ring_buffer_size=config.ring_buffer_size,
+            event_log_dir=config.event_log_dir,
         )
         self._server: asyncio.AbstractServer | None = None
         self._connections: set[Connection] = set()

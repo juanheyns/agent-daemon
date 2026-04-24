@@ -66,7 +66,7 @@ async def test_normal_turn_produces_result(monkeypatch):
         session_id="s1",
         argv=_make_argv("s1"),
         cwd=None,
-        event_queue=queue,
+        on_event=queue.put,
         logger=logger,
     )
     await proc.spawn()
@@ -94,7 +94,7 @@ async def test_session_busy_while_turn_in_flight(monkeypatch):
         session_id="s1",
         argv=_make_argv("s1"),
         cwd=None,
-        event_queue=queue,
+        on_event=queue.put,
         logger=logger,
     )
     await proc.spawn()
@@ -121,7 +121,7 @@ async def test_interrupt_kills_and_respawns_with_resume(monkeypatch):
         session_id="s1",
         argv=_make_argv("s1"),
         cwd=None,
-        event_queue=queue,
+        on_event=queue.put,
         logger=logger,
     )
     await proc.spawn()
@@ -154,7 +154,7 @@ async def test_interrupt_noop_when_idle(monkeypatch):
         session_id="s1",
         argv=_make_argv("s1"),
         cwd=None,
-        event_queue=queue,
+        on_event=queue.put,
         logger=logger,
     )
     await proc.spawn()
@@ -173,7 +173,7 @@ async def test_crash_surfaces_claude_crashed(monkeypatch):
         session_id="s1",
         argv=_make_argv("s1"),
         cwd=None,
-        event_queue=queue,
+        on_event=queue.put,
         logger=logger,
     )
     await proc.spawn()
@@ -198,7 +198,7 @@ async def test_oauth_detection(monkeypatch):
         session_id="s1",
         argv=_make_argv("s1"),
         cwd=None,
-        event_queue=queue,
+        on_event=queue.put,
         logger=logger,
     )
     await proc.spawn()

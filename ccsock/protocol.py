@@ -108,6 +108,7 @@ class OpenMessage:
     session: str
     resume: bool
     fields: dict[str, Any]  # raw validated fields for flag mapping
+    last_seen_seq: int | None = None
 
 
 @dataclasses.dataclass(slots=True)
@@ -173,6 +174,7 @@ _OPEN_VALID_FIELDS = {
     "id",
     "session",
     "resume",
+    "last_seen_seq",
     "model",
     "system_prompt",
     "append_system_prompt",
@@ -234,7 +236,18 @@ def parse_open(obj: dict[str, Any]) -> OpenMessage:
     if req_id is not None and not isinstance(req_id, str):
         raise ProtocolError("'id' must be a string")
 
-    return OpenMessage(id=req_id, session=session, resume=resume, fields=fields)
+    last_seen_seq = obj.get("last_seen_seq")
+    if last_seen_seq is not None:
+        if not isinstance(last_seen_seq, int) or last_seen_seq < 0:
+            raise ProtocolError("'last_seen_seq' must be a non-negative integer")
+
+    return OpenMessage(
+        id=req_id,
+        session=session,
+        resume=resume,
+        fields=fields,
+        last_seen_seq=last_seen_seq,
+    )
 
 
 def parse_user(obj: dict[str, Any]) -> UserMessage:
