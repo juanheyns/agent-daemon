@@ -1,10 +1,12 @@
 name: Release
 
-# Triggered by pushing a tag like v0.1.0. Builds sdist + wheel, attaches
-# them to a GitHub Release, and (optionally) publishes to PyPI via Trusted
-# Publishers. Enable PyPI publishing by configuring a trusted publisher at
-# https://pypi.org/manage/account/publishing/ and then flipping the
-# `publish-pypi` job's `if:` guard below.
+# Triggered by pushing a tag like v0.1.0. Pipeline order:
+#   build → publish-pypi → gh-release
+# The GitHub Release is intentionally the last step so that downstream
+# automation listening on `release: published` (e.g. bump-tap.yml) only
+# fires after PyPI is green. If PyPI publish fails the release is not
+# created and the tap is not bumped — the package stays consistent
+# across channels.
 
 on:
   push:
@@ -32,20 +34,6 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  gh-release:
-    name: Attach to GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-          generate_release_notes: true
-
   publish-pypi:
     name: Publish to PyPI (Trusted Publishers)
     needs: build
@@ -61,3 +49,20 @@ jobs:
           name: dist
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  gh-release:
+    name: Attach to GitHub Release
+    # Run after PyPI so downstream automation listening on
+    # `release: published` (bump-tap.yml) only fires once the wheel is
+    # actually installable from PyPI.
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
