@@ -66,6 +66,16 @@ Breaking protocol changes require a protocol-version bump (`blemees/1`
 
 ## Releasing
 
-Maintainers only. Tagging `vX.Y.Z` on `main` triggers `.github/workflows/release.yml`,
-which builds and publishes to PyPI + GitHub Releases. `bump-tap.yml`
-then pushes an updated formula to `blemees/homebrew-tap`.
+Maintainers only. From a clean `main` in sync with `origin`, run:
+
+```bash
+./scripts/release.sh patch        # 0.5.0 → 0.5.1
+./scripts/release.sh minor        # 0.5.0 → 0.6.0
+./scripts/release.sh major        # 0.5.0 → 1.0.0
+./scripts/release.sh 0.6.2        # explicit
+```
+
+The script bumps `pyproject.toml`, commits, tags `vX.Y.Z`, and pushes
+both. That tag triggers `.github/workflows/release.yml` (build →
+publish-pypi → gh-release); `bump-tap.yml` then updates
+`blemees/homebrew-tap`. Watch progress with `gh run watch`.
