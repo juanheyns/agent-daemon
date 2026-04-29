@@ -133,35 +133,31 @@ class Harness:
         self._io_lock = (
             asyncio.Lock()
         )  # serialize stdout so reader + sender don't interleave mid-line
-        # True only once readline has actually drawn the prompt for the
-        # current `input()` call (flipped on by a pre_input_hook installed
-        # in `repl()`). When True, async prints erase the prompt line
-        # before writing and redraw `PROMPT + readline buffer` after, so
-        # the user's in-progress input survives. Setting this from "input
-        # was scheduled" instead of "readline drew the prompt" causes a
-        # race where `get_line_buffer()` returns the *previous* line that
-        # was just submitted, which the redraw then echoes back.
+        # True from just before `input()` is scheduled until just after
+        # it returns. When True, async prints erase the current line so
+        # an inbound frame doesn't land glued to the prompt. We don't
+        # try to redraw the prompt + readline's line buffer ourselves:
+        # macOS Python links against libedit (not GNU readline), where
+        # `pre_input_hook` never fires and `get_line_buffer()` keeps the
+        # previously-submitted line until readline starts a new read,
+        # so any redraw that uses it echoes stale text. Letting readline
+        # redisplay the prompt + buffer on the next keystroke is correct
+        # everywhere.
         self._prompt_active: bool = False
 
     # ---- printing -------------------------------------------------
 
-    def _on_readline_active(self) -> None:
-        """readline ``pre_input_hook`` — fires after the prompt is drawn."""
-        self._prompt_active = True
-
     def _emit(self, text: str) -> None:
-        """Write *text* to stdout, redrawing the prompt around it if active.
+        """Write *text* to stdout, erasing the prompt line if active.
 
         Caller must hold ``_io_lock``. ``text`` should NOT end with a
-        trailing newline — this helper supplies one before the redraw so
-        the prompt lands on its own line.
+        trailing newline — this helper supplies one. Readline redraws
+        the prompt + in-progress buffer on the next keystroke; until
+        then the user sees only the inbound frame on its own line.
         """
         if self._prompt_active:
             sys.stdout.write(_ERASE_LINE)
         sys.stdout.write(text + "\n")
-        if self._prompt_active:
-            buf = _readline.get_line_buffer() if _readline is not None else ""
-            sys.stdout.write(PROMPT + buf)
         sys.stdout.flush()
 
     async def _print_frame(self, direction: str, frame: dict[str, Any]) -> None:
@@ -487,10 +483,6 @@ async def repl(initial_connect: bool, socket_path: str | None) -> int:
         histfile = Path.home() / ".blemees_history"
         with contextlib.suppress(FileNotFoundError, OSError):
             _readline.read_history_file(str(histfile))
-        # Fires after readline has drawn the prompt and is about to start
-        # reading input — that's the only point at which `get_line_buffer()`
-        # is meaningful for the *current* line.
-        _readline.set_pre_input_hook(harness._on_readline_active)
 
     print("blemees — interactive wire tester. Type `help` for commands; Ctrl-D to quit.")
 
@@ -502,6 +494,7 @@ async def repl(initial_connect: bool, socket_path: str | None) -> int:
 
     try:
         while True:
+            harness._prompt_active = True
             try:
                 line = await asyncio.to_thread(input, PROMPT)
             except EOFError:
@@ -512,8 +505,7 @@ async def repl(initial_connect: bool, socket_path: str | None) -> int:
                 harness._prompt_active = False
                 print()
                 continue
-            else:
-                harness._prompt_active = False
+            harness._prompt_active = False
             try:
                 keep_going = await dispatch(harness, line)
             except Exception as e:  # noqa: BLE001 — one bad command shouldn't crash the REPL
@@ -524,12 +516,9 @@ async def repl(initial_connect: bool, socket_path: str | None) -> int:
     finally:
         with contextlib.suppress(Exception):
             await harness.disconnect()
-        if _readline is not None:
-            with contextlib.suppress(Exception):
-                _readline.set_pre_input_hook(None)
-            if histfile is not None:
-                with contextlib.suppress(OSError):
-                    _readline.write_history_file(str(histfile))
+        if _readline is not None and histfile is not None:
+            with contextlib.suppress(OSError):
+                _readline.write_history_file(str(histfile))
 
     return 0
 

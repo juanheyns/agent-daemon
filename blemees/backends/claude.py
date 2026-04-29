@@ -652,6 +652,80 @@ def list_on_disk_sessions(cwd: str | None) -> list[dict]:
     return out
 
 
+def _scan_transcript_metadata(path: Path) -> dict[str, Any]:
+    """Read the first few lines of a CC transcript for ``cwd`` / ``model``.
+
+    Both fields appear inline on most event records; we scan up to a
+    handful of lines to find a non-null value. Returns ``{}`` on read
+    failure.
+    """
+    out: dict[str, Any] = {}
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as fh:
+            for _ in range(_PREVIEW_SCAN_LINES):
+                line = fh.readline()
+                if not line:
+                    break
+                try:
+                    evt = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(evt, dict):
+                    continue
+                if "cwd" not in out and isinstance(evt.get("cwd"), str) and evt["cwd"]:
+                    out["cwd"] = evt["cwd"]
+                if "model" not in out and isinstance(evt.get("model"), str) and evt["model"]:
+                    out["model"] = evt["model"]
+                if "cwd" in out and "model" in out:
+                    break
+    except OSError:
+        pass
+    return out
+
+
+def find_session_by_id(session_id: str) -> dict | None:
+    """Locate a CC transcript by session_id across all known projects.
+
+    Walks ``~/.claude/projects/*/<session_id>.jsonl``. Returns
+    ``{backend, session_id, native_session_id, cwd?, model?, mtime_ms,
+    rollout_path}`` for the newest matching transcript, or ``None`` if
+    no match. ``cwd`` / ``model`` are extracted from the transcript
+    head (which carries them inline on most event records); both are
+    omitted from the result when not derivable.
+    """
+    projects_root = Path.home() / ".claude" / "projects"
+    if not projects_root.is_dir():
+        return None
+    best: tuple[float, Path] | None = None
+    try:
+        for project_dir in projects_root.iterdir():
+            if not project_dir.is_dir():
+                continue
+            candidate = project_dir / f"{session_id}.jsonl"
+            if not candidate.is_file():
+                continue
+            try:
+                st = candidate.stat()
+            except OSError:
+                continue
+            if best is None or st.st_mtime > best[0]:
+                best = (st.st_mtime, candidate)
+    except OSError:
+        return None
+    if best is None:
+        return None
+    mtime, path = best
+    record: dict[str, Any] = {
+        "backend": "claude",
+        "session_id": session_id,
+        "native_session_id": session_id,
+        "mtime_ms": int(mtime * 1000),
+        "rollout_path": str(path),
+    }
+    record.update(_scan_transcript_metadata(path))
+    return record
+
+
 # ---------------------------------------------------------------------------
 # Version detection
 # ---------------------------------------------------------------------------
@@ -690,6 +764,7 @@ __all__ = [
     "build_argv",
     "build_user_stdin_line",
     "detect_version",
+    "find_session_by_id",
     "list_on_disk_sessions",
     "project_dir_for_cwd",
     "session_file_path",

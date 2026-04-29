@@ -1049,6 +1049,91 @@ def session_file_path(_cwd: str | None, _session_id: str) -> Path | None:
     return None
 
 
+def find_session_by_id(thread_id: str) -> dict | None:
+    """Locate a Codex rollout by ``threadId`` across all cwds.
+
+    Walks ``~/.codex/sessions/YYYY/MM/DD/`` newest-first (capped at
+    :data:`_LIST_MAX_DAYS` days, :data:`_LIST_MAX_FILES` files), matching
+    filenames against the rollout regex and returning the first whose
+    ``threadId`` equals *thread_id*. Reads the file head once to extract
+    ``cwd`` / ``model`` from ``session_configured``.
+
+    Returns ``{backend, session_id, native_session_id, cwd?, model?,
+    mtime_ms, rollout_path}`` or ``None`` when nothing matches.
+    """
+    root = codex_sessions_root()
+    if not root.is_dir():
+        return None
+
+    days_scanned = 0
+    files_considered = 0
+    try:
+        year_dirs = sorted(
+            (d for d in root.iterdir() if d.is_dir() and d.name.isdigit()),
+            key=lambda d: d.name,
+            reverse=True,
+        )
+    except OSError:
+        return None
+
+    for year_dir in year_dirs:
+        try:
+            month_dirs = sorted(
+                (d for d in year_dir.iterdir() if d.is_dir() and d.name.isdigit()),
+                key=lambda d: d.name,
+                reverse=True,
+            )
+        except OSError:
+            continue
+        for month_dir in month_dirs:
+            try:
+                day_dirs = sorted(
+                    (d for d in month_dir.iterdir() if d.is_dir() and d.name.isdigit()),
+                    key=lambda d: d.name,
+                    reverse=True,
+                )
+            except OSError:
+                continue
+            for day_dir in day_dirs:
+                days_scanned += 1
+                if days_scanned > _LIST_MAX_DAYS:
+                    return None
+                try:
+                    entries = sorted(
+                        (e for e in day_dir.iterdir() if e.is_file() and e.suffix == ".jsonl"),
+                        key=lambda e: e.name,
+                        reverse=True,
+                    )
+                except OSError:
+                    continue
+                for entry in entries:
+                    files_considered += 1
+                    if files_considered > _LIST_MAX_FILES:
+                        return None
+                    if _thread_id_from_filename(entry.name) != thread_id:
+                        continue
+                    try:
+                        st = entry.stat()
+                    except OSError:
+                        continue
+                    record: dict[str, Any] = {
+                        "backend": "codex",
+                        "session_id": thread_id,
+                        "native_session_id": thread_id,
+                        "mtime_ms": int(st.st_mtime * 1000),
+                        "rollout_path": str(entry),
+                    }
+                    head = _read_rollout_head(entry)
+                    sc = _extract_session_configured(head)
+                    if isinstance(sc, dict):
+                        if isinstance(sc.get("cwd"), str) and sc["cwd"]:
+                            record["cwd"] = sc["cwd"]
+                        if isinstance(sc.get("model"), str) and sc["model"]:
+                            record["model"] = sc["model"]
+                    return record
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Version detection
 # ---------------------------------------------------------------------------
@@ -1087,6 +1172,7 @@ __all__ = [
     "build_argv",
     "build_codex_tool_args",
     "detect_version",
+    "find_session_by_id",
     "list_on_disk_sessions",
     "session_file_path",
     "validate_options",

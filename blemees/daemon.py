@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import os
 import signal
 import socket
@@ -24,6 +25,7 @@ from .backends.claude import (
     ClaudeBackend,
     build_argv as build_claude_argv,
     detect_version as detect_claude_version,
+    find_session_by_id as find_claude_session_by_id,
     list_on_disk_sessions as list_claude_session_files,
     validate_options as validate_claude_options,
 )
@@ -31,6 +33,7 @@ from .backends.codex import (
     CodexBackend,
     build_argv as build_codex_argv,
     detect_version as detect_codex_version,
+    find_session_by_id as find_codex_session_by_id,
     list_on_disk_sessions as list_codex_session_files,
     validate_options as validate_codex_options,
 )
@@ -622,11 +625,31 @@ class Connection:
     async def _handle_session_info(self, msg) -> None:
         """Reply with the session's cumulative usage + per-turn snapshot.
 
-        No side effects. Persists across daemon restarts when the durable
-        event log is enabled (sidecar at ``<log_dir>/<session>.usage.json``).
+        No side effects. For sessions live in memory, returns the
+        in-memory accumulator. For sessions that exist only on disk
+        (closed sessions, sessions from a previous daemon run, sessions
+        listed via ``list_sessions`` but not yet reattached), walks the
+        on-disk transcripts and merges in the durable usage sidecar
+        when it's available — usage counters are zero in that case
+        unless the sidecar is present, but at least ``backend`` /
+        ``cwd`` / ``model`` are populated so the client can decide
+        what to do with the row.
         """
         sess = self._sessions.try_get(msg.session_id)
-        if sess is None:
+        if sess is not None:
+            subproc_running = sess.backend is not None and sess.backend.running
+            snap = sess.usage_snapshot(
+                attached=sess.connection_id is not None,
+                subprocess_running=subproc_running,
+            )
+            frame: dict[str, Any] = {"type": "blemeesd.session_info_reply", "id": msg.id}
+            frame.update(snap)
+            await self._emit_frame(frame)
+            return
+
+        # Not in memory — try the on-disk transcripts + durable sidecar.
+        snap = self._session_info_from_disk(msg.session_id)
+        if snap is None:
             await self._emit_error(
                 SESSION_UNKNOWN,
                 f"no such session: {msg.session_id}",
@@ -634,14 +657,101 @@ class Connection:
                 session_id=msg.session_id,
             )
             return
-        subproc_running = sess.backend is not None and sess.backend.running
-        snap = sess.usage_snapshot(
-            attached=sess.connection_id is not None,
-            subprocess_running=subproc_running,
-        )
-        frame: dict[str, Any] = {"type": "blemeesd.session_info_reply", "id": msg.id}
+        frame = {"type": "blemeesd.session_info_reply", "id": msg.id}
         frame.update(snap)
         await self._emit_frame(frame)
+
+    def _session_info_from_disk(self, session_id: str) -> dict[str, Any] | None:
+        """Build a session_info snapshot from on-disk artefacts only.
+
+        Tries Claude project transcripts first (cheap glob), then Codex
+        rollouts (date-bucketed scan, capped). Independently merges in
+        the durable usage sidecar at ``<event_log_dir>/<session>.usage.json``
+        when present — that's the only place persistent usage counters
+        live. Returns ``None`` when nothing on disk matches.
+        """
+        match = find_claude_session_by_id(session_id) or find_codex_session_by_id(session_id)
+        sidecar = self._load_usage_sidecar(session_id)
+        if match is None and sidecar is None:
+            return None
+
+        out: dict[str, Any] = {
+            "session_id": session_id,
+            "turns": 0,
+            "last_turn_at_ms": None,
+            "last_turn_usage": {},
+            "cumulative_usage": {},
+            "context_tokens": 0,
+            "attached": False,
+            "subprocess_running": False,
+            "last_seq": 0,
+        }
+
+        if match is not None:
+            out["backend"] = match["backend"]
+            out["native_session_id"] = match.get("native_session_id", session_id)
+            if "cwd" in match:
+                out["cwd"] = match["cwd"]
+            if "model" in match:
+                out["model"] = match["model"]
+            mtime = match.get("mtime_ms")
+            if isinstance(mtime, int):
+                out["last_turn_at_ms"] = mtime
+
+        if sidecar is not None:
+            if isinstance(sidecar.get("model"), str) and "model" not in out:
+                out["model"] = sidecar["model"]
+            if isinstance(sidecar.get("turns"), int):
+                out["turns"] = sidecar["turns"]
+            if isinstance(sidecar.get("last_turn_at_ms"), int):
+                out["last_turn_at_ms"] = sidecar["last_turn_at_ms"]
+            if isinstance(sidecar.get("last_turn_usage"), dict):
+                out["last_turn_usage"] = {
+                    k: v for k, v in sidecar["last_turn_usage"].items() if isinstance(v, int)
+                }
+            if isinstance(sidecar.get("cumulative_usage"), dict):
+                out["cumulative_usage"] = {
+                    k: v for k, v in sidecar["cumulative_usage"].items() if isinstance(v, int)
+                }
+            if isinstance(sidecar.get("native_session_id"), str):
+                out["native_session_id"] = sidecar["native_session_id"]
+            # If we never found an on-disk transcript but the sidecar's
+            # rollout_path points at a codex rollout, that's enough to
+            # tag the backend.
+            if "backend" not in out:
+                rp = sidecar.get("rollout_path")
+                if isinstance(rp, str) and "/.codex/" in rp:
+                    out["backend"] = "codex"
+                else:
+                    out["backend"] = "claude"
+                out["native_session_id"] = out.get("native_session_id", session_id)
+
+        # Recompute context_tokens from whatever last_turn_usage we ended up with.
+        last = out["last_turn_usage"]
+        out["context_tokens"] = (
+            int(last.get("input_tokens", 0) or 0)
+            + int(last.get("cache_read_input_tokens", 0) or 0)
+            + int(last.get("cache_creation_input_tokens", 0) or 0)
+        )
+        return out
+
+    def _load_usage_sidecar(self, session_id: str) -> dict[str, Any] | None:
+        """Read ``<event_log_dir>/<session>.usage.json`` if enabled.
+
+        Returns the parsed payload or ``None`` (no event log configured,
+        sidecar missing, or unreadable / malformed JSON).
+        """
+        log_dir = self._config.event_log_dir
+        if not log_dir:
+            return None
+        path = Path(log_dir) / f"{session_id}.usage.json"
+        if not path.is_file():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
 
     # ------------------------------------------------------------------
     # Writer side

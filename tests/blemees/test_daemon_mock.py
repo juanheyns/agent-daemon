@@ -984,6 +984,49 @@ async def test_session_info_unknown_session_errors(client_factory):
     assert err["code"] == "session_unknown"
 
 
+async def test_session_info_finds_on_disk_session(client_factory, monkeypatch, tmp_path):
+    """A session that's on-disk but not in memory still returns session_info.
+
+    Plant a synthetic CC transcript under a fake $HOME and ask for its
+    info. The reply carries ``backend`` / ``cwd`` / ``model`` from the
+    transcript head; usage counters are zeros (no durable sidecar).
+    """
+    fake_home = tmp_path / "fake-home"
+    proj_cwd = "/tmp/repro-on-disk-cwd"
+    encoded = proj_cwd.replace("/", "-").lstrip("-")
+    proj_dir = fake_home / ".claude" / "projects" / f"-{encoded}"
+    proj_dir.mkdir(parents=True)
+    sid = "9b9b9b9b-1234-1234-1234-9b9b9b9b9b9b"
+    (proj_dir / f"{sid}.jsonl").write_text(
+        json.dumps(
+            {
+                "type": "user",
+                "cwd": proj_cwd,
+                "model": "claude-sonnet-4-6",
+                "sessionId": sid,
+                "message": {"role": "user", "content": "hi"},
+            }
+        )
+        + "\n"
+    )
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+
+    client = await client_factory()
+    await client.send({"type": "blemeesd.session_info", "id": "i1", "session_id": sid})
+    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.session_info_reply")
+    assert reply["backend"] == "claude"
+    assert reply["session_id"] == sid
+    assert reply["native_session_id"] == sid
+    assert reply["cwd"] == proj_cwd
+    assert reply["model"] == "claude-sonnet-4-6"
+    assert reply["turns"] == 0
+    assert reply["attached"] is False
+    assert reply["subprocess_running"] is False
+    assert reply["context_tokens"] == 0
+    assert reply["last_turn_usage"] == {}
+    assert reply["cumulative_usage"] == {}
+
+
 async def test_session_info_accumulates_across_turns(client_factory, fake_mode):
     fake_mode("normal")
     c = await client_factory()
