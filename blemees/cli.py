@@ -41,7 +41,13 @@ from typing import Any
 from . import PROTOCOL_VERSION, __version__
 from .client import default_socket_path
 
+try:
+    import readline as _readline
+except ImportError:
+    _readline = None  # type: ignore[assignment]
+
 PROMPT = "blemees> "
+_ERASE_LINE = "\r\x1b[2K"
 HELP = """\
 Commands — each sends one wire frame, responses are printed as they arrive:
 
@@ -127,8 +133,28 @@ class Harness:
         self._io_lock = (
             asyncio.Lock()
         )  # serialize stdout so reader + sender don't interleave mid-line
+        # True while `input(PROMPT)` is blocked waiting for the user. Async
+        # prints (inbound frames, notes) erase the prompt line before
+        # writing and redraw `PROMPT + readline buffer` after, so the
+        # in-progress input survives.
+        self._prompt_active: bool = False
 
     # ---- printing -------------------------------------------------
+
+    def _emit(self, text: str) -> None:
+        """Write *text* to stdout, redrawing the prompt around it if active.
+
+        Caller must hold ``_io_lock``. ``text`` should NOT end with a
+        trailing newline — this helper supplies one before the redraw so
+        the prompt lands on its own line.
+        """
+        if self._prompt_active:
+            sys.stdout.write(_ERASE_LINE)
+        sys.stdout.write(text + "\n")
+        if self._prompt_active:
+            buf = _readline.get_line_buffer() if _readline is not None else ""
+            sys.stdout.write(PROMPT + buf)
+        sys.stdout.flush()
 
     async def _print_frame(self, direction: str, frame: dict[str, Any]) -> None:
         arrow = "\x1b[36m→\x1b[0m" if direction == "out" else "\x1b[32m←\x1b[0m"
@@ -143,11 +169,11 @@ class Harness:
             seq = frame.get("seq")
             header += f" {t}" + (f" seq={seq}" if seq is not None else "")
         async with self._io_lock:
-            print(f"{header}  {body}", flush=True)
+            self._emit(f"{header}  {body}")
 
     async def _print_note(self, msg: str) -> None:
         async with self._io_lock:
-            print(f"\x1b[33m· {msg}\x1b[0m", flush=True)
+            self._emit(f"\x1b[33m· {msg}\x1b[0m")
 
     # ---- send/recv ------------------------------------------------
 
@@ -444,21 +470,17 @@ def _on_off(s: str) -> bool:
 
 
 async def repl(initial_connect: bool, socket_path: str | None) -> int:
-    # Readline buys us up-arrow history + line editing on posix; no-op import
-    # is enough — input() picks it up transparently.
+    # Readline buys us up-arrow history + line editing on posix; the
+    # module-level import lets _emit() reach into the line buffer to
+    # redraw the prompt around async inbound frames.
     histfile: Path | None = None
-    try:
-        import readline
-
+    if _readline is not None:
         histfile = Path.home() / ".blemees_history"
         with contextlib.suppress(FileNotFoundError, OSError):
-            readline.read_history_file(str(histfile))
-    except ImportError:
-        readline = None  # type: ignore[assignment]
+            _readline.read_history_file(str(histfile))
 
     harness = Harness()
     print("blemees — interactive wire tester. Type `help` for commands; Ctrl-D to quit.")
-    print("Inbound frames print asynchronously; press Enter to redraw the prompt.")
 
     if initial_connect:
         try:
@@ -468,14 +490,19 @@ async def repl(initial_connect: bool, socket_path: str | None) -> int:
 
     try:
         while True:
+            harness._prompt_active = True
             try:
                 line = await asyncio.to_thread(input, PROMPT)
             except EOFError:
+                harness._prompt_active = False
                 print()
                 break
             except KeyboardInterrupt:
+                harness._prompt_active = False
                 print()
                 continue
+            else:
+                harness._prompt_active = False
             try:
                 keep_going = await dispatch(harness, line)
             except Exception as e:  # noqa: BLE001 — one bad command shouldn't crash the REPL
@@ -486,9 +513,9 @@ async def repl(initial_connect: bool, socket_path: str | None) -> int:
     finally:
         with contextlib.suppress(Exception):
             await harness.disconnect()
-        if readline is not None and histfile is not None:
+        if _readline is not None and histfile is not None:
             with contextlib.suppress(OSError):
-                readline.write_history_file(str(histfile))
+                _readline.write_history_file(str(histfile))
 
     return 0
 
