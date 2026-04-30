@@ -94,33 +94,40 @@ brew services start blemees
 The Homebrew formula ships a service stanza so the daemon runs at login
 without you touching launchd by hand.
 
-### Smoke-test the wire (`blemees`)
+### Smoke-test the wire (`blemeesctl`)
 
-The package also ships `blemees`, an interactive REPL that maps each
-command to one outbound wire frame and prints every inbound frame. It's
-not a chat UI — it's how you poke the protocol, sanity-check an install,
-or reproduce a bug from a known sequence of frames.
+The package also ships `blemeesctl`, an interactive REPL that maps
+each command to one outbound wire frame and prints every inbound
+frame. It's not a chat UI — it's how you poke the protocol,
+sanity-check an install, or reproduce a bug from a known sequence of
+frames.
+
+> **Renamed in 0.9.0** — pre-0.9 wheels shipped this REPL as `blemees`.
+> The `blemees` console_script is no longer registered by the daemon
+> wheel; it's reserved for the chat TUI shipped by the
+> [`blemees-tui`](https://github.com/blemees/blemees-tui) package. If
+> muscle-memory has you typing `blemees`, retrain to `blemeesctl`.
 
 ```
-$ blemees
+$ blemeesctl
 · connected: /tmp/blemeesd-501.sock
-→ {"type":"blemeesd.hello","client":"blemees-cli/0.1.0","protocol":"blemees/2"}
-← blemeesd.hello_ack  {"daemon":"blemeesd/0.1.0","backends":{"claude":"2.1.118","codex":"0.125.0"},…}
-blemees> status
+→ {"type":"blemeesd.hello","client":"blemeesctl/0.9.0","protocol":"blemees/2"}
+← blemeesd.hello_ack  {"daemon":"blemeesd/0.9.0","backends":{"claude":"2.1.118","codex":"0.125.0"},…}
+blemeesctl> status
 ← blemeesd.status_reply  {"uptime_s":12.4,"connections":1,…}
-blemees> open new backend=claude options.model=sonnet options.permission_mode=bypassPermissions
+blemeesctl> open new backend=claude options.model=sonnet options.permission_mode=bypassPermissions
 · session_id: 5a01f0d8-…
 ← blemeesd.opened  …
-blemees> send 5a01f0d8-… what is 2+2?
+blemeesctl> send 5a01f0d8-… what is 2+2?
 ← agent.delta {"backend":"claude","kind":"text","text":"4"}
 ← agent.result {"backend":"claude","subtype":"success","duration_ms":…}
-blemees> close 5a01f0d8-…
+blemeesctl> close 5a01f0d8-…
 ```
 
 `help` at the prompt lists every verb. Highlights: `open` / `resume` /
 `close` / `interrupt` / `send` / `send-json` / `watch` / `unwatch` /
-`status` / `session-info` / `sessions <cwd>` / `ping`. `raw {…}` sends
-an arbitrary JSON frame for protocol experiments.
+`status` / `session-info` / `sessions [cwd]` / `ping`. `raw {…}`
+sends an arbitrary JSON frame for protocol experiments.
 
 ---
 
@@ -292,7 +299,7 @@ Every `type` on the wire carries an explicit namespace prefix:
 
 | Prefix | Emitted by | Purpose |
 |---|---|---|
-| `blemeesd.*` | client → daemon, daemon → client | Session lifecycle and daemon operations: `hello`, `hello_ack`, `open`, `opened`, `close`, `closed`, `interrupt`, `interrupted`, `error`, `stderr`, `replay_gap`, `list_sessions`, `sessions`, `ping`, `pong`, `status`, `status_reply`, `watch`, `watching`, `unwatch`, `unwatched`, `session_taken`, `session_info`, `session_info_reply`. |
+| `blemeesd.*` | client → daemon, daemon → client | Session lifecycle and daemon operations: `hello`, `hello_ack`, `open`, `opened`, `close`, `closed`, `interrupt`, `interrupted`, `error`, `stderr`, `replay_gap`, `list_sessions`, `sessions`, `ping`, `pong`, `status`, `status_reply`, `watch`, `watching`, `unwatch`, `unwatched`, `session_taken`, `session_closed`, `session_info`, `session_info_reply`. |
 | `agent.*` | client → daemon, daemon → client | Conversation messages, normalised across backends. Inbound (`agent.user`) is the client's user turn, which the daemon hands to the backend's native input mechanism (CC: stream-json stdin; Codex: `tools/call`). Outbound is the daemon's translated event stream: `agent.system_init`, `agent.delta`, `agent.message`, `agent.user_echo`, `agent.tool_use`, `agent.tool_result`, `agent.notice`, `agent.result`. Every outbound `agent.*` frame carries a `backend: "claude" \| "codex"` field; clients that want backend-native fidelity can opt into a `raw` field per session via `options.<backend>.include_raw_events: true`. The full type-by-type translation table is in [`docs/agent-events.md`](docs/agent-events.md). |
 
 Rationale: two stable namespaces — one for session lifecycle, one for
@@ -646,6 +653,15 @@ Daemon replies:
 {"type":"blemeesd.closed","id":"req_099","session_id":"s_abc"}
 ```
 
+If the session has watchers attached (§5.14), they receive a
+`blemeesd.session_closed{session_id, reason:"owner_closed"}`
+notification *before* the daemon unhooks their writers. The closer
+itself does **not** receive `session_closed` — it gets the `closed`
+ack to its own request. Owners and watchers thus get distinct,
+non-overlapping signals. `reason` is forward-extensible; v0.9 emits
+only `"owner_closed"` (the explicit-close path), with future codes
+reserved for connection-drop / reaper / crash paths.
+
 ### 5.9 Connection close
 
 When the socket is closed from the client side without explicit `close`
@@ -829,8 +845,10 @@ that binary at startup; sessions for it will fail with `spawn_failed`.
 A second connection may subscribe to an existing session's event
 stream without taking ownership. The owner keeps driving the session;
 watchers receive the same `agent.*` events, `blemeesd.stderr`,
-`blemeesd.error{backend_crashed,auth_failed}`, and `blemeesd.replay_gap`
-frames the owner does, plus an optional replay on subscribe.
+`blemeesd.error{backend_crashed,auth_failed}`, `blemeesd.replay_gap`,
+and `blemeesd.session_closed` frames the owner does (where they apply
+— `session_closed` is watcher-only), plus an optional replay on
+subscribe.
 
 Client:
 ```json
@@ -844,6 +862,13 @@ Unknown session → `blemeesd.error{code:"session_unknown"}`. Multiple
 connections may watch the same session. Watchers cannot drive:
 `agent.user`, `blemeesd.interrupt`, `blemeesd.close`, and
 `blemeesd.session_taken` remain connection-scoped to the owner.
+
+When the owner explicitly closes the session, every watcher receives
+`blemeesd.session_closed{session_id, reason:"owner_closed"}`
+immediately before the daemon unhooks their writers — see §5.8.
+Reattaching after that point returns
+`blemeesd.error{code:"session_unknown"}`, so the close is the
+watchers' canonical end-of-life signal.
 
 Unsubscribe:
 ```json
@@ -901,6 +926,103 @@ written to `<event_log_dir>/<session>.usage.json` on every turn
 daemon restarts. Without the durable log they are in-memory only and
 reset to zero on restart. `blemeesd.close {delete:true}` also
 unlinks the sidecar.
+
+### 5.16 Session listing (`list_sessions`)
+
+Enumerate sessions known to the daemon. `cwd` and `live` are
+independent, fully-composable filters; **omitting a filter means "no
+filter on that axis."**
+
+```json
+{"type":"blemeesd.list_sessions","id":"req_6"}                                   // every session, every cwd
+{"type":"blemeesd.list_sessions","id":"req_6","cwd":"/home/u/proj"}              // every session for that cwd
+{"type":"blemeesd.list_sessions","id":"req_6","live":true}                       // live only, every cwd
+{"type":"blemeesd.list_sessions","id":"req_6","live":false}                      // cold only, every cwd
+{"type":"blemeesd.list_sessions","id":"req_6","cwd":"/home/u/proj","live":true}  // live only, that cwd
+```
+
+| `cwd` | `live`  | Behavior                                                                                                          |
+|-------|---------|--------------------------------------------------------------------------------------------------------------------|
+| set   | omitted | On-disk transcripts merged with live overlay for that cwd. Original v0.1 contract — parity with `/resume`.        |
+| set   | `true`  | Live sessions only, scoped to that cwd. No disk scan.                                                              |
+| set   | `false` | Cold (on-disk-only) sessions for that cwd. Excludes any session that's currently live.                             |
+| absent| omitted | Every session, everywhere — full disk walk across `~/.claude/projects/*` and `~/.codex/sessions/*` plus every live session. |
+| absent| `true`  | Every live session, all cwds. The cheap path for "what's running right now?". Suitable for a watch-mode picker.    |
+| absent| `false` | Every cold session, all cwds. The historical-browser query.                                                        |
+
+When `live:false` is set, sessions that *are* currently live are
+subtracted from the result — even if their transcript is on disk.
+The cold-only set is precisely the disk transcripts whose
+`(backend, session_id)` is not present in `SessionTable`.
+
+Reply:
+```json
+{
+  "type":"blemeesd.sessions","id":"req_6",
+  "cwd":"/home/u/proj",
+  "sessions":[
+    {
+      "session_id":"5a01...",
+      "backend":"claude",
+      "attached":true,
+      "cwd":"/home/u/proj",
+      "model":"claude-sonnet-4-6",
+      "title":"refactor utils.py",
+      "started_at_ms":1745000000000,
+      "last_active_at_ms":1745000123000,
+      "owner_pid":12345,
+      "last_seq":47,
+      "turn_active":false
+    },
+    {
+      "session_id":"older",
+      "backend":"claude",
+      "attached":false,
+      "mtime_ms":1700000000000,
+      "size":4321,
+      "preview":"fix the bug"
+    }
+  ]
+}
+```
+
+The reply echoes top-level `cwd` only when the request supplied one.
+Each row in `sessions` is one of three shapes:
+
+- **Live row** — `attached`, optional `cwd` / `model` / `title`,
+  `started_at_ms`, `last_active_at_ms`, optional `owner_pid`,
+  `last_seq`, `turn_active`. Surfaces the daemon's in-memory state.
+- **Cwd-scoped on-disk row** — `mtime_ms`, `size`, optional
+  `preview`. Built from a single project's transcript files. The
+  request's top-level `cwd` is the implied per-row cwd.
+- **All-cwds on-disk row** — same as above plus `cwd` (extracted
+  from the transcript head, since the directory-name encoding is
+  lossy) and, when readable, `model`. Self-describing because the
+  reply has no top-level `cwd`.
+
+If a session is both live and has a transcript, the row carries
+fields from both groups (the live overlay merges into the disk row
+by `(backend, session_id)`). Sort order is `last_active_at_ms`
+(preferred, precise) falling back to `mtime_ms` (disk lag) when
+absent. Unknown optional fields are **omitted**, never `null` —
+clients should treat absence as "not known".
+
+`title` is daemon-derived from the first observed user message,
+capped at 80 characters. Sessions that have never driven a turn don't
+have one. `owner_pid` is the SO_PEERCRED PID of the connection
+currently driving the session, surfaced for audit/debugging; it is
+absent when the session is detached or when the OS doesn't expose
+peer credentials. Both fields exist primarily so multi-session UIs
+(see [`blemees-tui`](https://github.com/blemees/blemees-tui)) can
+build a watch-mode picker without scraping log files for ids.
+
+**Cost note:** the no-filter form (`{}`) walks every project
+directory and reads each transcript's head, which is O(total
+sessions) across both backends. For users with thousands of
+historical sessions this can take a while. Watch-picker UIs should
+use `live:true` for the cheap variant; historical browsers should
+expect to wait or paginate (Codex's walk is bounded by retention
+caps, Claude's is not).
 
 ---
 
@@ -1474,6 +1596,25 @@ Acceptance targets on an ordinary dev machine:
   must request the version the daemon advertises in `hello_ack`.
   `blemees/1` is gone — pre-1.0 means no compatibility shims.
 - Daemon: semver. `0.x` unstable; breaking changes allowed pre-1.0.
+
+### Notable changes in 0.9.0
+
+- **`blemeesd.list_sessions` filters compose** (§5.16). `cwd` is now
+  optional, `live` is a new optional boolean. The reply's
+  `SessionSummary` shape is extended with live-only optional fields
+  (`title`, `model`, `cwd`, `started_at_ms`, `last_active_at_ms`,
+  `owner_pid`, `last_seq`, `turn_active`). Clients on the original
+  shape still work — every old field is still emitted, every new
+  field is optional.
+- **`blemeesd.session_closed`** (§5.8, §5.14) — new outbound frame
+  delivered to watchers when the owner closes a session.
+- **`blemees` console_script renamed to `blemeesctl`** (§0). The
+  daemon wheel no longer ships a `blemees` command; that name now
+  belongs to the chat TUI shipped by the
+  [`blemees-tui`](https://github.com/blemees/blemees-tui) package.
+  Users who typed `blemees` for the wire-protocol REPL should
+  retrain to `blemeesctl`. No deprecation alias — clean break, since
+  any alias would have collided with the TUI's claim on the name.
 
 ---
 
