@@ -24,17 +24,6 @@
 }
 
 {
-  "category": "task_started",
-  "data": {
-    "started_at_ms": "<ts>",
-    "turn_id": "<turn_id_1>"
-  },
-  "level": "info",
-  "session_id": "<session_id>",
-  "type": "agent.notice"
-}
-
-{
   "capabilities": {
     "permission_mode": "bypassPermissions",
     "rollout_path": "<rollout_path>"
@@ -69,7 +58,30 @@
 }
 
 {
-  "category": "claude_unknown_rate_limit_event",
+  "category": "task_started",
+  "data": {
+    "started_at_ms": "<ts>",
+    "turn_id": "<turn_id_1>"
+  },
+  "level": "info",
+  "session_id": "<session_id>",
+  "type": "agent.notice"
+}
+
+{
+  "category": "rate_limits",
+  "data": {
+    "rate_limit_info": {
+      "isUsingOverage": false,
+      "overageDisabledReason": "org_level_disabled",
+      "overageStatus": "rejected",
+      "rateLimitType": "five_hour",
+      "resetsAt": 1777578000,
+      "status": "allowed"
+    },
+    "session_id": "<session_id>",
+    "uuid": "27f1bcc2-fc16-4910-b288-93a07d173936"
+  },
   "level": "info",
   "session_id": "<session_id>",
   "type": "agent.notice"

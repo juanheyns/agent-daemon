@@ -82,6 +82,12 @@
 }
 
 {
+  "line": "<stderr_line>",
+  "session_id": "<session_id>",
+  "type": "blemeesd.stderr"
+}
+
+{
   "category": "backend_mcp_startup",
   "data": {
     "server": "codex_apps",
@@ -131,7 +137,7 @@
     "plan_type": "free",
     "primary": {
       "resets_at": 1777599825,
-      "used_percent": 47.0,
+      "used_percent": 48.0,
       "window_minutes": 10080
     },
     "rate_limit_reached_type": null,

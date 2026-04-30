@@ -16,6 +16,7 @@ from blemees.backends.claude import (
     list_on_disk_sessions,
     project_dir_for_cwd,
 )
+from blemees.backends.translate_claude import translate_event
 from blemees.errors import SessionBusyError
 from blemees.logging import configure
 
@@ -29,6 +30,47 @@ def _make_argv(session: str, *, for_resume: bool = False) -> list[str]:
         options={"tools": ""},
         for_resume=for_resume,
     )
+
+
+# ---------------------------------------------------------------------------
+# translate_claude — pure-function tests
+# ---------------------------------------------------------------------------
+
+
+def test_rate_limit_event_maps_to_unified_rate_limits_notice():
+    """CC's `rate_limit_event` lands as `agent.notice{rate_limits}` —
+    same `category` codex emits for its `token_count` rate-limit ping,
+    so a backend-agnostic client can filter by category.
+    """
+    cc_event = {
+        "type": "rate_limit_event",
+        "tokens_left": 12345,
+        "reset_at": 1900000000,
+        "model": "claude-sonnet-4-6",
+    }
+    out = translate_event(cc_event)
+    assert len(out) == 1
+    notice = out[0]
+    assert notice["type"] == "agent.notice"
+    assert notice["level"] == "info"
+    assert notice["category"] == "rate_limits"
+    # All non-`type` fields propagate under data, so future CC additions
+    # land without code changes.
+    assert notice["data"] == {
+        "tokens_left": 12345,
+        "reset_at": 1900000000,
+        "model": "claude-sonnet-4-6",
+    }
+
+
+def test_rate_limit_event_with_no_extra_fields_omits_data():
+    out = translate_event({"type": "rate_limit_event"})
+    assert out == [{"type": "agent.notice", "level": "info", "category": "rate_limits"}]
+
+
+def test_rate_limit_event_carries_raw_when_requested():
+    out = translate_event({"type": "rate_limit_event", "x": 1}, include_raw=True)
+    assert out[0]["raw"] == {"type": "rate_limit_event", "x": 1}
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +165,43 @@ async def test_send_user_turn_emits_task_started_notice(monkeypatch):
         assert isinstance(ts["data"]["started_at_ms"], int)
         # The same turn_id surfaces on the closing agent.result.
         assert events[-1].get("turn_id") == ts["data"]["turn_id"]
+    finally:
+        await proc.close()
+
+
+async def test_task_started_notice_is_emitted_after_system_init(monkeypatch):
+    """Frame order matches codex: agent.system_init lands first, then
+    the synth agent.notice{task_started}, then the content events.
+
+    Codex emits `session_configured` → `task_started` natively; for
+    parity the daemon defers Claude's synth notice until CC's first
+    stdout event (`system{subtype:"init"}`) has been forwarded.
+    """
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", "normal")
+    queue: asyncio.Queue = asyncio.Queue()
+    logger = configure("error")
+    proc = ClaudeBackend(
+        session_id="s1",
+        argv=_make_argv("s1"),
+        cwd=None,
+        on_event=queue.put,
+        logger=logger,
+    )
+    await proc.spawn()
+    try:
+        await proc.send_user_turn({"role": "user", "content": "hi"})
+        events = await _drain_until_result(queue, "s1")
+        # Find positions; both must be present.
+        init_idx = next(i for i, e in enumerate(events) if e["type"] == "agent.system_init")
+        ts_idx = next(
+            i
+            for i, e in enumerate(events)
+            if e["type"] == "agent.notice" and e.get("category") == "task_started"
+        )
+        assert init_idx < ts_idx, (
+            f"agent.system_init (idx={init_idx}) must precede task_started "
+            f"(idx={ts_idx}) — see docs/asymmetries.md item 6"
+        )
     finally:
         await proc.close()
 

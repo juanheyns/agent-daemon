@@ -116,55 +116,34 @@ filter by whether the same turn produced `agent.tool_result` frames.
 
 ---
 
-## 5. CC `rate_limit_event` is unmapped
+## 5. CC `rate_limit_event` is unmapped — *fixed*
 
-**Codex:** emits `token_count` events with rate-limit data; the
-translator surfaces them as
-`agent.notice{category:"rate_limits", data: <…>}`. Mapped row in
-[`agent-events.md`](agent-events.md).
+**Status:** resolved. `translate_claude._translate_rate_limit_event`
+maps CC's `rate_limit_event` → `agent.notice{level:"info",
+category:"rate_limits", data:<rest>}`, the same shape codex emits
+from `token_count{info:null}`. Pinned by
+`tests/blemees/test_backend_claude.py::test_rate_limit_event_*`.
 
-**Claude:** emits a `rate_limit_event` (top-level CC stream-json
-event), but the translator has no row for it — they fall through to
-the unknown-event path and surface as
-`agent.notice{category:"claude_unknown_rate_limit_event"}`. Spotted
-by [`scripts/transcript_compare.py`](../scripts/transcript_compare.py)
-on a routine "pong" prompt — every Claude transcript currently carries
-this stray notice.
-
-**Why we left it alone:** unlike the items above this one is just
-unfinished, not deferred. Should be a small change to
-`translate_claude.py` to add a row mapping `rate_limit_event` → 
-`agent.notice{category:"rate_limits", data: <event payload>}` so both
-backends use the same category name.
-
-**Future option:** capture a real `rate_limit_event` from CC (one
-shows up after every turn, so any trace will do — see
-`docs/traces/transcript-claude.txt`), lock the field shape, add the
-translator row + a fixture-driven test. Estimated 30 min.
+The translator passes every non-`type` field through under `data`,
+so future CC additions propagate without a code change. Section
+preserved here as a worked example of the drift policy below.
 
 ---
 
-## 6. Frame ordering around `task_started` differs
+## 6. Frame ordering around `task_started` differs — *fixed*
 
-**Codex:** native order is `session_configured` → `task_started` →
-content events. The translator emits them in that order: `agent.system_init`
-arrives first, then `agent.notice{task_started}`.
+**Status:** resolved. `ClaudeBackend.send_user_turn` now stashes the
+synth `agent.notice{task_started}` and `_read_stdout` flushes it
+immediately after forwarding `agent.system_init`. Frame order on
+Claude now matches codex's native `session_configured → task_started
+→ content events` flow. Pinned by
+`test_task_started_notice_is_emitted_after_system_init`.
 
-**Claude:** the daemon synthesises `agent.notice{task_started}` from
-`send_user_turn` *before* CC's stdin is even read, so the notice
-lands before `agent.system_init`. Strictly speaking this also leaks
-the daemon's view of "turn started" earlier than the model's view.
-
-**Why we left it alone:** swapping the order would require buffering
-the synth notice until `agent.system_init` arrives — plumbing for
-plumbing's sake unless a client actually trips on it. The frames are
-seq-tagged so any client driven by `seq` order rather than wall clock
-will handle either ordering fine.
-
-**Future option:** if symmetry of frame *order* (not just frame set)
-becomes important, gate the synth `task_started` emission on having
-already emitted `agent.system_init` for this spawn — easy because
-`ClaudeBackend` already knows the spawn lifecycle.
+The `_system_init_emitted` / `_pending_task_started` state is
+spawn-scoped — both reset on every `spawn()` call so a `--resume`
+respawn re-defers until the new child's first init lands. On turn 2
+and beyond (where init has already been emitted for the spawn) the
+notice goes out immediately without buffering.
 
 ---
 

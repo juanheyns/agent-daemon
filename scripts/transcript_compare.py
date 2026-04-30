@@ -178,6 +178,10 @@ _FIXED_REDACTIONS: dict[str, str] = {
     "input": "<input>",
     "output": "<output>",
     "command": "<command>",
+    # `blemeesd.stderr.line` is free-form diagnostic text from the
+    # backend child — useful at runtime, but unstable across runs
+    # (timestamps, paths, PIDs) so it dominates a structural diff.
+    "line": "<stderr_line>",
 }
 
 # Leaf-level fields that get *enumerated* per transcript: same input

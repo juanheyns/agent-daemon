@@ -117,6 +117,12 @@ class ClaudeBackend:
         # synthesised `agent.result` (e.g. mid-turn auth failure). Stops
         # `_watch_exit` from emitting a duplicate close on the same turn.
         self._turn_finalized: bool = False
+        # Spawn-scoped state for ordering the synth `task_started` notice
+        # *after* `agent.system_init` (matches codex's session_configured →
+        # task_started order). Reset on every spawn so a `--resume`
+        # respawn re-defers until the new spawn's init lands.
+        self._system_init_emitted: bool = False
+        self._pending_task_started: dict[str, Any] | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -129,6 +135,10 @@ class ClaudeBackend:
             argv_head=self._argv[:4],
             cwd=self._cwd,
         )
+        # Reset spawn-scoped state so the new child's first `system_init`
+        # is what triggers the deferred `task_started` flush.
+        self._system_init_emitted = False
+        self._pending_task_started = None
         try:
             self.proc = await asyncio.create_subprocess_exec(
                 *self._argv,
@@ -165,7 +175,9 @@ class ClaudeBackend:
         ``time_to_first_token_ms``) on the eventual ``agent.result`` is
         symmetrical with what codex emits natively. Also emits a
         synthesised ``agent.notice{category:"task_started"}`` so clients
-        get a turn-start hook on both backends.
+        get a turn-start hook on both backends — but defers the emit
+        until the spawn's ``agent.system_init`` has been forwarded, so
+        the frame order matches codex (init first, then task_started).
         """
         if self.proc is None or self.proc.returncode is not None:
             raise SpawnFailedError("subprocess not running")
@@ -187,18 +199,23 @@ class ClaudeBackend:
                 self._reset_turn_state()
                 raise SpawnFailedError(f"stdin write failed: {exc}") from exc
 
-        await self._on_event(
-            {
-                "type": "agent.notice",
-                "level": "info",
-                "category": "task_started",
-                "data": {
-                    "turn_id": self._current_turn_id,
-                    "started_at_ms": self._turn_started_at_ms,
-                },
-                "backend": self.backend,
-            }
-        )
+        notice = {
+            "type": "agent.notice",
+            "level": "info",
+            "category": "task_started",
+            "data": {
+                "turn_id": self._current_turn_id,
+                "started_at_ms": self._turn_started_at_ms,
+            },
+            "backend": self.backend,
+        }
+        if self._system_init_emitted:
+            await self._on_event(notice)
+        else:
+            # Stash; `_read_stdout` flushes immediately after emitting
+            # `agent.system_init` so frames land in the codex-equivalent
+            # order: init → task_started → content events.
+            self._pending_task_started = notice
 
     # ------------------------------------------------------------------
     # Interrupt + close
@@ -335,6 +352,15 @@ class ClaudeBackend:
                     self._turn_finalized = True
                     self._reset_turn_state()
                 await self._on_event(frame)
+                # Flush the deferred `task_started` notice immediately
+                # after `agent.system_init` so the frame order matches
+                # codex (session_configured → task_started → content).
+                if ftype == "agent.system_init" and not self._system_init_emitted:
+                    self._system_init_emitted = True
+                    pending = self._pending_task_started
+                    self._pending_task_started = None
+                    if pending is not None:
+                        await self._on_event(pending)
 
     async def _read_stderr(self) -> None:
         assert self.proc is not None and self.proc.stderr is not None

@@ -47,6 +47,8 @@ def translate_event(event: dict[str, Any], *, include_raw: bool = False) -> list
         return _translate_user(event, raw)
     if cc_type == "result":
         return [_translate_result(event, raw)]
+    if cc_type == "rate_limit_event":
+        return _translate_rate_limit_event(event, raw)
     if cc_type == "partial_assistant":
         # Drop — redundant once we emit the deltas individually.
         return []
@@ -262,6 +264,36 @@ def _translate_user(event: dict[str, Any], raw: dict[str, Any] | None) -> list[d
     if raw is not None:
         echo["raw"] = raw
     return [echo]
+
+
+# ---------------------------------------------------------------------------
+# `rate_limit_event`
+# ---------------------------------------------------------------------------
+
+
+def _translate_rate_limit_event(
+    event: dict[str, Any], raw: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """CC's per-turn rate-limit ping → unified `rate_limits` notice.
+
+    Mirrors codex's `token_count{info:null, rate_limits}` mapping
+    (translate_codex._translate_token_count) so a client that filters
+    `agent.notice` by category sees the same `"rate_limits"` value
+    on both backends. We don't pin CC's payload shape — pass every
+    field except `type` through under `data` so future CC additions
+    propagate without a code change.
+    """
+    data = {k: v for k, v in event.items() if k != "type"}
+    notice: dict[str, Any] = {
+        "type": "agent.notice",
+        "level": "info",
+        "category": "rate_limits",
+    }
+    if data:
+        notice["data"] = data
+    if raw is not None:
+        notice["raw"] = raw
+    return [notice]
 
 
 # ---------------------------------------------------------------------------
