@@ -286,14 +286,53 @@ def _translate_rate_limit_event(
 ) -> list[dict[str, Any]]:
     """CC's per-turn rate-limit ping → unified `rate_limits` notice.
 
-    Mirrors codex's `token_count{info:null, rate_limits}` mapping
-    (translate_codex._translate_token_count) so a client that filters
-    `agent.notice` by category sees the same `"rate_limits"` value
-    on both backends. We don't pin CC's payload shape — pass every
-    field except `type` through under `data` so future CC additions
-    propagate without a code change.
+    The output shape matches codex's: a ``data.limit`` block carrying
+    the cross-backend fields (``resets_at_ms``, ``used_percent``,
+    ``window_minutes``, ``status``) plus a ``data.vendor`` catch-all
+    for everything else. See ``agent-events.md`` for the full
+    contract.
+
+    CC's payload looks like::
+
+      {"type":"rate_limit_event",
+       "rate_limit_info":{"resetsAt":1777578000,
+                          "rateLimitType":"five_hour",
+                          "status":"allowed",
+                          "isUsingOverage":false, …},
+       "uuid":"…","session_id":"…"}
+
+    We pull ``resetsAt`` (Unix seconds → ms), ``status`` into the
+    unified ``limit`` block and stash everything else under
+    ``vendor`` so clients that want full fidelity can still get it.
     """
-    data = {k: v for k, v in event.items() if k != "type"}
+    info = event.get("rate_limit_info")
+    limit: dict[str, Any] = {}
+    if isinstance(info, dict):
+        resets = info.get("resetsAt")
+        if isinstance(resets, (int, float)):
+            limit["resets_at_ms"] = int(resets * 1000)
+        status = info.get("status")
+        if isinstance(status, str):
+            limit["status"] = status
+
+    data: dict[str, Any] = {}
+    if limit:
+        data["limit"] = limit
+
+    # Vendor: everything that didn't fit the unified shape — the
+    # untouched fields under `rate_limit_info` plus the event-level
+    # fields (uuid, session_id, …) excluding the wire `type`.
+    vendor: dict[str, Any] = {}
+    if isinstance(info, dict):
+        for k, v in info.items():
+            if k not in ("resetsAt", "status"):
+                vendor[k] = v
+    for k, v in event.items():
+        if k not in ("type", "rate_limit_info"):
+            vendor[k] = v
+    if vendor:
+        data["vendor"] = vendor
+
     notice: dict[str, Any] = {
         "type": "agent.notice",
         "level": "info",

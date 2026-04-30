@@ -37,16 +37,23 @@ def _make_argv(session: str, *, for_resume: bool = False) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def test_rate_limit_event_maps_to_unified_rate_limits_notice():
-    """CC's `rate_limit_event` lands as `agent.notice{rate_limits}` —
-    same `category` codex emits for its `token_count` rate-limit ping,
-    so a backend-agnostic client can filter by category.
+def test_rate_limit_event_extracts_unified_limit_block():
+    """CC's `rate_limit_event` is normalised into the unified
+    `data.limit` shape (resets_at_ms, status) so a backend-agnostic
+    client gets the same fields on both backends. Vendor-specific
+    extras (overage flags, uuid, etc) land under `data.vendor`.
     """
     cc_event = {
         "type": "rate_limit_event",
-        "tokens_left": 12345,
-        "reset_at": 1900000000,
-        "model": "claude-sonnet-4-6",
+        "rate_limit_info": {
+            "resetsAt": 1777578000,
+            "rateLimitType": "five_hour",
+            "status": "allowed",
+            "isUsingOverage": False,
+            "overageStatus": "rejected",
+        },
+        "uuid": "9eaa7974-6ac4-4944-96e3-4102eb752585",
+        "session_id": "abcd",
     }
     out = translate_event(cc_event)
     assert len(out) == 1
@@ -54,23 +61,39 @@ def test_rate_limit_event_maps_to_unified_rate_limits_notice():
     assert notice["type"] == "agent.notice"
     assert notice["level"] == "info"
     assert notice["category"] == "rate_limits"
-    # All non-`type` fields propagate under data, so future CC additions
-    # land without code changes.
     assert notice["data"] == {
-        "tokens_left": 12345,
-        "reset_at": 1900000000,
-        "model": "claude-sonnet-4-6",
+        "limit": {
+            "resets_at_ms": 1777578000_000,
+            "status": "allowed",
+        },
+        "vendor": {
+            "rateLimitType": "five_hour",
+            "isUsingOverage": False,
+            "overageStatus": "rejected",
+            "uuid": "9eaa7974-6ac4-4944-96e3-4102eb752585",
+            "session_id": "abcd",
+        },
     }
 
 
-def test_rate_limit_event_with_no_extra_fields_omits_data():
+def test_rate_limit_event_with_no_rate_limit_info_only_vendor():
+    """Bare `rate_limit_event` with no structured `rate_limit_info`:
+    we still emit the notice, with all event-level fields under vendor.
+    """
+    out = translate_event({"type": "rate_limit_event", "uuid": "xyz"})
+    notice = out[0]
+    assert notice["category"] == "rate_limits"
+    assert notice["data"] == {"vendor": {"uuid": "xyz"}}
+
+
+def test_rate_limit_event_with_only_type_omits_data():
     out = translate_event({"type": "rate_limit_event"})
     assert out == [{"type": "agent.notice", "level": "info", "category": "rate_limits"}]
 
 
 def test_rate_limit_event_carries_raw_when_requested():
-    out = translate_event({"type": "rate_limit_event", "x": 1}, include_raw=True)
-    assert out[0]["raw"] == {"type": "rate_limit_event", "x": 1}
+    out = translate_event({"type": "rate_limit_event", "uuid": "u"}, include_raw=True)
+    assert out[0]["raw"] == {"type": "rate_limit_event", "uuid": "u"}
 
 
 def test_assistant_no_tool_use_gets_final_answer_phase():

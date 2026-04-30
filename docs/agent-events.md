@@ -128,6 +128,17 @@ following invariants regardless of backend:
   blocks; mid-turn messages (those calling a tool) omit `phase`
   rather than mislabel them.
 
+- **`agent.notice{rate_limits}.data` has a unified envelope.**
+  Both translators emit `data.limit` (and optional
+  `data.secondary_limit` for codex paid plans) carrying the
+  cross-backend fields when known: `resets_at_ms` (Unix ms),
+  `used_percent`, `window_minutes`, `status`. Vendor-specific
+  extras (codex's `plan_type`/`limit_id`/…; CC's overage flags
+  and event UUID) land under `data.vendor`. Cross-backend code can
+  read `data.limit.resets_at_ms` or `data.limit.used_percent`
+  without branching by backend; debug tooling can read
+  `data.vendor` for full fidelity.
+
 For the residual asymmetries the daemon does **not** try to paper
 over — reasoning/thinking deltas, MCP startup chatter, the
 codex-side tool-use coverage gap, and Claude's tool-result-block
@@ -155,6 +166,7 @@ splitting — see [`docs/asymmetries.md`](asymmetries.md).
 | `user{message: {content: string \| [text-only]}}` | `agent.user_echo{message}` | Only when `options.claude.user_echo:true` (passes `--replay-user-messages` to CC). Off by default. |
 | `user{message: {content: [..., {type:"tool_result", tool_use_id, content, is_error}, ...]}}` | one `agent.tool_result{tool_use_id, output:content, is_error}` per `tool_result` block; remaining text blocks emit a single `agent.user_echo`. | Tool-result fan-out happens regardless of `user_echo`; the surrounding text echo follows the same toggle as the row above. |
 | `result{subtype, duration_ms, num_turns, usage}` | `agent.result{subtype, duration_ms, num_turns, turn_id, time_to_first_token_ms?, usage: <pass-through>}` | `turn_id` is the per-turn UUID hex; `time_to_first_token_ms` is daemon-side wall-clock from `send_user_turn` to the first model-output frame (`agent.delta` for long replies, `agent.message` / `agent.tool_use` for short replies CC didn't chunk). Both daemon-synthesised. |
+| `rate_limit_event{rate_limit_info, …}` | `agent.notice{level:"info", category:"rate_limits", data: {limit, vendor}}` | Per-turn CC rate-limit ping. Same unified `data.limit` envelope codex uses. The translator extracts `rate_limit_info.resetsAt` (Unix seconds → `resets_at_ms`) and `status` into `data.limit`; everything else (`rateLimitType`, overage flags, event-level `uuid` / `session_id`) lands under `data.vendor`. |
 | (synth, daemon-side; CC subprocess crashed mid-turn) | `agent.result{subtype:"error", num_turns:1, turn_id, time_to_first_token_ms?, error:{code:"backend_crashed", message}}` | Emitted alongside `blemeesd.error{backend_crashed}` so clients waiting on `agent.result` see a clean turn close (spec §5.6 invariant). |
 | (synth, daemon-side; CC stderr matched auth-failure pattern mid-turn) | `agent.result{subtype:"error", num_turns:1, turn_id, time_to_first_token_ms?, error:{code:"auth_failed", message}}` | Emitted alongside `blemeesd.error{auth_failed}`. |
 
@@ -183,7 +195,7 @@ originating `tools/call`, plus the preceding `task_complete` and last
 | `agent_message_delta{delta}` | dropped (duplicate of `agent_message_content_delta`) | Both flavours arrive; we keep only the one with `item_id`. |
 | `agent_message{message, phase}` | dropped (duplicate of `item_completed{AgentMessage}`) | |
 | `user_message{message}` | dropped (duplicate of `item_completed{UserMessage}`) | |
-| `token_count{info: null, rate_limits}` | `agent.notice{level:"info", category:"rate_limits", data: rate_limits}` | Mid-turn rate-limit ping. |
+| `token_count{info: null, rate_limits}` | `agent.notice{level:"info", category:"rate_limits", data: {limit, secondary_limit?, vendor}}` | Mid-turn rate-limit ping. The translator normalises the codex payload into the cross-backend shape: `data.limit.{resets_at_ms?, used_percent?, window_minutes?, status?}` (extracted from `rate_limits.primary` with `resets_at` converted from Unix seconds to ms); `data.secondary_limit` follows the same shape when `rate_limits.secondary` is non-null; `data.vendor` carries everything else verbatim (`plan_type`, `limit_id`, `rate_limit_reached_type`, `credits`, …). |
 | `token_count{info:{total_token_usage, last_token_usage, model_context_window}, rate_limits}` | held; folded into the synthesised `agent.result.usage` (using `last_token_usage`) at turn end. | |
 | `exec_command_begin` (and family) | `agent.tool_use{tool_use_id: msg.call_id, name:"shell" \| msg.tool, input: msg.command \| msg.params}` | *Not observed in the captured trace; mapping locked from Codex source. Re-trace with a tool-using prompt before Phase 3 implementation.* |
 | `exec_command_end` (and family) | `agent.tool_result{tool_use_id, output, is_error}` | Same caveat. |

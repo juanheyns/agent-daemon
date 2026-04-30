@@ -274,14 +274,61 @@ def test_raw_response_item_is_dropped():
 
 
 def test_token_count_mid_turn_is_rate_limit_notice():
+    """Codex's mid-turn rate-limit ping is normalised into the unified
+    `data.limit` shape — vendor extras (plan_type, limit_id, …) go
+    under `data.vendor`. See agent-events.md `rate_limits` row."""
     msg = {
         "type": "token_count",
         "info": None,
-        "rate_limits": {"primary": {"used_percent": 16.0}},
+        "rate_limits": {
+            "primary": {
+                "resets_at": 1777599825,
+                "used_percent": 16.0,
+                "window_minutes": 10080,
+            },
+            "secondary": None,
+            "plan_type": "free",
+            "limit_id": "codex",
+        },
     }
     [notice] = CodexTranslator().translate_event(msg, meta=META)
     assert notice["category"] == "rate_limits"
-    assert notice["data"] == {"primary": {"used_percent": 16.0}}
+    assert notice["data"] == {
+        "limit": {
+            "resets_at_ms": 1777599825_000,
+            "used_percent": 16.0,
+            "window_minutes": 10080,
+        },
+        "vendor": {
+            "plan_type": "free",
+            "limit_id": "codex",
+        },
+    }
+
+
+def test_token_count_mid_turn_includes_secondary_limit_when_present():
+    msg = {
+        "type": "token_count",
+        "info": None,
+        "rate_limits": {
+            "primary": {"resets_at": 1777315342, "used_percent": 12.5},
+            "secondary": {"resets_at": 1777315500, "used_percent": 88.0, "window_minutes": 300},
+        },
+    }
+    [notice] = CodexTranslator().translate_event(msg, meta=META)
+    assert notice["data"]["secondary_limit"] == {
+        "resets_at_ms": 1777315500_000,
+        "used_percent": 88.0,
+        "window_minutes": 300,
+    }
+
+
+def test_token_count_mid_turn_with_no_rate_limits_emits_empty_notice():
+    """`rate_limits` missing or non-dict → category-only notice (no data)."""
+    msg = {"type": "token_count", "info": None}
+    [notice] = CodexTranslator().translate_event(msg, meta=META)
+    assert notice["category"] == "rate_limits"
+    assert "data" not in notice
 
 
 def test_token_count_final_is_buffered_for_result():

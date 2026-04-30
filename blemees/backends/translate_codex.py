@@ -246,14 +246,16 @@ class CodexTranslator:
     ) -> list[dict[str, Any]]:
         info = msg.get("info")
         if info is None:
-            # Mid-turn rate-limit ping. Surface as a notice.
-            data = msg.get("rate_limits")
+            # Mid-turn rate-limit ping. Surface as a notice with the
+            # unified `data.limit` envelope (see agent-events.md);
+            # vendor-specific extras go under `data.vendor`.
+            data = _normalise_rate_limits_codex(msg.get("rate_limits"))
             notice: dict[str, Any] = {
                 "type": "agent.notice",
                 "level": "info",
                 "category": "rate_limits",
             }
-            if isinstance(data, dict):
+            if data:
                 notice["data"] = data
             if raw is not None:
                 notice["raw"] = raw
@@ -544,6 +546,57 @@ def _normalise_codex_content(content: Any) -> list[dict[str, Any]]:
         else:
             # Unknown / future block — pass through verbatim.
             out.append(dict(block))
+    return out
+
+
+def _normalise_rate_limits_codex(rate_limits: Any) -> dict[str, Any]:
+    """Build the unified `agent.notice{rate_limits}.data` block from codex's
+    payload.
+
+    Shape (see ``agent-events.md`` ``rate_limits`` row + symmetry
+    guarantees):
+
+      data.limit             — primary window
+      data.secondary_limit?  — secondary window (paid plans)
+      data.vendor            — everything else, verbatim
+
+    All fields under ``limit`` / ``secondary_limit`` are optional; the
+    daemon does best-effort extraction.
+    """
+    if not isinstance(rate_limits, dict):
+        return {}
+    out: dict[str, Any] = {}
+
+    primary = _extract_codex_limit(rate_limits.get("primary"))
+    if primary:
+        out["limit"] = primary
+    secondary = _extract_codex_limit(rate_limits.get("secondary"))
+    if secondary:
+        out["secondary_limit"] = secondary
+
+    vendor = {k: v for k, v in rate_limits.items() if k not in ("primary", "secondary")}
+    if vendor:
+        out["vendor"] = vendor
+    return out
+
+
+def _extract_codex_limit(block: Any) -> dict[str, Any]:
+    """Pick the unified-shape fields out of one codex limit block."""
+    if not isinstance(block, dict):
+        return {}
+    out: dict[str, Any] = {}
+    resets = block.get("resets_at")
+    if isinstance(resets, (int, float)):
+        # Codex sends `resets_at` in Unix seconds — normalise to ms
+        # to match the daemon's ms-everywhere convention (see
+        # task_started.data.started_at_ms, etc).
+        out["resets_at_ms"] = int(resets * 1000)
+    used = block.get("used_percent")
+    if isinstance(used, (int, float)):
+        out["used_percent"] = used
+    window = block.get("window_minutes")
+    if isinstance(window, int):
+        out["window_minutes"] = window
     return out
 
 

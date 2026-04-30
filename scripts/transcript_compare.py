@@ -167,8 +167,14 @@ _FIXED_REDACTIONS: dict[str, str] = {
     "started_at_ms": "<ts>",
     "started_at": "<ts>",
     "last_turn_at_ms": "<ts>",
+    "resets_at_ms": "<ts>",
+    "resets_at": "<ts>",
+    "resetsAt": "<ts>",
     "duration_ms": "<ms>",
     "time_to_first_token_ms": "<ms>",
+    # Volatile gauges that change every run; redact so structural
+    # diffs aren't drowned in numeric churn.
+    "used_percent": "<percent>",
     # Reply text we don't care about for shape-diff.
     "text": "<text>",
     "delta": "<text>",

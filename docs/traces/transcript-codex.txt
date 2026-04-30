@@ -111,17 +111,18 @@
 {
   "category": "rate_limits",
   "data": {
-    "credits": null,
-    "limit_id": "codex",
-    "limit_name": null,
-    "plan_type": "free",
-    "primary": {
-      "resets_at": 1777599825,
-      "used_percent": 49.0,
+    "limit": {
+      "resets_at_ms": "<ts>",
+      "used_percent": "<percent>",
       "window_minutes": 10080
     },
-    "rate_limit_reached_type": null,
-    "secondary": null
+    "vendor": {
+      "credits": null,
+      "limit_id": "codex",
+      "limit_name": null,
+      "plan_type": "free",
+      "rate_limit_reached_type": null
+    }
   },
   "level": "info",
   "session_id": "<session_id>",

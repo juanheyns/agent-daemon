@@ -69,16 +69,18 @@
 {
   "category": "rate_limits",
   "data": {
-    "rate_limit_info": {
+    "limit": {
+      "resets_at_ms": "<ts>",
+      "status": "allowed"
+    },
+    "vendor": {
       "isUsingOverage": false,
       "overageDisabledReason": "org_level_disabled",
       "overageStatus": "rejected",
       "rateLimitType": "five_hour",
-      "resetsAt": 1777578000,
-      "status": "allowed"
-    },
-    "session_id": "<session_id>",
-    "uuid": "9eaa7974-6ac4-4944-96e3-4102eb752585"
+      "session_id": "<session_id>",
+      "uuid": "e9d2f688-bfbb-44b9-a52c-491bbfa1f829"
+    }
   },
   "level": "info",
   "session_id": "<session_id>",
