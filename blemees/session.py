@@ -30,27 +30,9 @@ from pathlib import Path
 from typing import Any
 
 from .backends import AgentBackend
-from .backends.claude import session_file_path as _claude_session_file_path
 from .errors import SessionExistsError, SessionUnknownError
 from .event_log import DurableEventLog, RingBuffer, event_log_path
 from .protocol import OpenMessage
-
-
-def _session_transcript_path(sess: Session) -> Path | None:
-    """Resolve the on-disk transcript path for a session.
-
-    For Claude the path is derived from cwd + session id. For Codex we
-    cache the rollout path on the session at ``agent.system_init`` time
-    (it lives under ``~/.codex/sessions/YYYY/MM/DD/rollout-…jsonl``);
-    we just return the cached value here.
-    """
-    if sess.backend_name == "claude":
-        return _claude_session_file_path(sess.cwd, sess.session_id)
-    if sess.backend_name == "codex":
-        if sess.rollout_path:
-            return Path(sess.rollout_path)
-    return None
-
 
 WriterFn = Callable[[dict], Awaitable[None]]
 
@@ -543,13 +525,15 @@ class SessionTable:
             else:
                 sess.log.close()
         if delete_file:
-            try:
-                path = _session_transcript_path(sess)
-                if path is not None and path.is_file():
-                    path.unlink()
-            except OSError:
-                pass
-            # Remove the usage sidecar alongside the log + transcript.
+            # Backend-native transcripts under `~/.claude/projects/` and
+            # `~/.codex/sessions/` are *not* removed: they live under
+            # directories the backends own and (for Codex) reference from
+            # an internal state DB. Deleting behind their backs surfaces
+            # as ERROR-level stderr noise (e.g. codex's "state db returned
+            # stale rollout path …") and breaks resume-from-disk for
+            # clients that didn't ask the daemon to do that. The daemon
+            # only removes its own files: the event log and the usage
+            # sidecar.
             if sess._usage_path is not None:
                 try:
                     if sess._usage_path.is_file():

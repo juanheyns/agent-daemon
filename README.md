@@ -614,10 +614,24 @@ Explicit session close:
 ```json
 {"type":"blemeesd.close","id":"req_099","session_id":"s_abc","delete":true}
 ```
-- `delete: true` → daemon removes the backend's transcript file from
-  disk after kill (CC: `~/.claude/projects/<cwd-hash>/<session>.jsonl`;
-  Codex: the rollout JSONL pointed at by `session_configured.msg.rollout_path`).
-- `delete: false` (default) → transcript retained for later `resume: true`.
+- `delete: true` → daemon kills the subprocess and removes its **own**
+  per-session state: the durable event log
+  (`<event_log_dir>/<session>.jsonl`) and the usage sidecar
+  (`<event_log_dir>/<session>.usage.json`). The backend's native
+  transcript files are **not** touched —
+  `~/.claude/projects/<cwd-hash>/<session>.jsonl` (Claude) and
+  `~/.codex/sessions/.../rollout-*.jsonl` (Codex) live under
+  directories the backends own, and Codex in particular tracks
+  rollouts in an internal state DB; deleting behind its back surfaces
+  as ERROR-level stderr noise on subsequent codex startups. Resume
+  from disk (e.g. via `list_sessions` then `open … resume:true`)
+  continues to work after a delete-close.
+- `delete: false` (default) → daemon keeps its event log + usage
+  sidecar so a later `resume:true` can replay across daemon
+  restarts.
+
+Either way, the backend's native transcript stays — clean it up
+manually if you want it gone.
 
 Daemon replies:
 ```json
@@ -959,8 +973,9 @@ Per §5.7:
 
 Claude Code stores session state at
 `~/.claude/projects/<cwd-hash>/<session-id>.jsonl`. The daemon does
-not parse these files. On `close` with `delete: true`, it removes the
-specific file.
+not parse these files and does **not** delete them — that directory
+is CC's to manage. `close{delete:true}` only removes the daemon's
+own per-session state (event log + usage sidecar). See §5.8.
 
 Optional startup housekeeping: remove session files older than
 `SESSION_RETENTION_DAYS` (default 7). Opt-in via config.
@@ -1056,9 +1071,15 @@ stream.
 Codex writes a per-session rollout JSONL whose path the server reports
 in `session_configured.msg.rollout_path` (e.g.
 `~/.codex/sessions/2026/04/27/rollout-2026-04-27T14-42-22-019d…jsonl`).
-The daemon caches this path and unlinks it on `close` with
-`delete: true`. Date-bucketed enumeration for `blemeesd.list_sessions`
-walks `~/.codex/sessions/` recursively (cheap; date-pruned to
+The daemon caches this path so it can surface it on
+`agent.system_init.capabilities.rollout_path`, but it does **not**
+unlink the file on `close{delete:true}` — Codex tracks rollouts in
+an internal state DB and deleting behind its back surfaces as
+`state db returned stale rollout path …` ERROR-level stderr noise on
+subsequent codex startups. See §5.8.
+
+Date-bucketed enumeration for `blemeesd.list_sessions` walks
+`~/.codex/sessions/` recursively (cheap; date-pruned to
 `SESSION_RETENTION_DAYS` when discovery is enabled).
 
 #### 6.2.6 Resume caveat (Codex 0.125.x)

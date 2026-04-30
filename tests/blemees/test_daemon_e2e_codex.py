@@ -397,8 +397,14 @@ async def test_real_codex_list_sessions_lifecycle(real_daemon, tmp_path):
         await c.close()
 
 
-async def test_real_codex_close_delete_removes_rollout(real_daemon, tmp_path):
-    """``close{delete:true}`` removes the rollout file from ``~/.codex/sessions``."""
+async def test_real_codex_close_delete_preserves_rollout(real_daemon, tmp_path):
+    """``close{delete:true}`` removes the daemon's own state (event log,
+    usage sidecar) but *not* codex's rollout under
+    ``~/.codex/sessions``. Codex manages its own directory and tracks
+    rollouts in an internal state DB; deleting the file behind its
+    back triggered ``state db returned stale rollout path …`` ERROR
+    spam on subsequent codex startups.
+    """
     c = await _client(real_daemon)
     cwd = str(tmp_path.resolve())
     try:
@@ -424,7 +430,8 @@ async def test_real_codex_close_delete_removes_rollout(real_daemon, tmp_path):
         await c.wait_for(lambda e: e.get("type") == "blemeesd.closed", timeout=10.0)
         from pathlib import Path as _P
 
-        assert not _P(rollout_path).exists(), f"rollout not deleted: {rollout_path}"
+        # Codex's rollout stays — only daemon-owned files are unlinked.
+        assert _P(rollout_path).exists(), f"backend rollout should not be deleted: {rollout_path}"
     finally:
         await c.close()
 

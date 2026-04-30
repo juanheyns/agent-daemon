@@ -354,8 +354,13 @@ async def test_real_claude_list_sessions_lifecycle(real_daemon, tmp_path):
         await c.close()
 
 
-async def test_real_claude_close_delete_removes_transcript(real_daemon, tmp_path):
-    """``close{delete:true}`` unlinks ``~/.claude/projects/<cwd>/<sid>.jsonl``."""
+async def test_real_claude_close_delete_preserves_backend_transcript(real_daemon, tmp_path):
+    """``close{delete:true}`` removes the daemon's own state (event log,
+    usage sidecar) but *not* CC's transcript under
+    ``~/.claude/projects/``. Backend dirs are the backend's domain;
+    the daemon doesn't garbage-collect them. Resume-from-disk for
+    that session_id continues to work after a delete-close.
+    """
     from blemees.backends.claude import session_file_path
 
     c = await _client(real_daemon)
@@ -370,7 +375,9 @@ async def test_real_claude_close_delete_removes_transcript(real_daemon, tmp_path
 
         await c.send({"type": "blemeesd.close", "id": "c1", "session_id": session, "delete": True})
         await c.wait_for(lambda e: e.get("type") == "blemeesd.closed", timeout=10.0)
-        assert not path.exists(), f"transcript not deleted: {path}"
+        # CC's own transcript stays — only the daemon's event log /
+        # usage sidecar are unlinked. CC manages its own directory.
+        assert path.exists(), f"backend transcript should not be deleted: {path}"
     finally:
         await c.close()
 

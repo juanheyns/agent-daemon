@@ -716,9 +716,16 @@ async def test_status_by_backend_counts_mixed_sessions(client_factory, fake_mode
     assert snap["sessions"]["total"] == 2
 
 
-async def test_codex_close_with_delete_unlinks_rollout(
+async def test_codex_close_with_delete_preserves_rollout(
     client_factory, fake_mode, tmp_path, monkeypatch
 ):
+    """`close{delete:true}` removes daemon-owned state (event log,
+    usage sidecar) but leaves codex's rollout under
+    ``~/.codex/sessions/`` alone — codex manages its own directory and
+    tracks rollouts in an internal state DB. Deleting the file behind
+    its back surfaced as ``state db returned stale rollout path …``
+    ERROR spam on subsequent codex startups.
+    """
     monkeypatch.setenv("HOME", str(tmp_path))
     fake_mode("normal")
 
@@ -749,7 +756,7 @@ async def test_codex_close_with_delete_unlinks_rollout(
     )
 
     # The fake codex rollout path is /tmp/fake-rollout.jsonl — write a
-    # stand-in so close{delete:true} has something to unlink.
+    # stand-in to verify the daemon does *not* unlink it.
     fake_rollout = Path("/tmp/fake-rollout.jsonl")
     fake_rollout.write_text("{}\n", encoding="utf-8")
     try:
@@ -762,7 +769,9 @@ async def test_codex_close_with_delete_unlinks_rollout(
             }
         )
         await client.wait_for(lambda e: e.get("type") == "blemeesd.closed")
-        assert not fake_rollout.is_file(), "rollout was not deleted"
+        assert fake_rollout.is_file(), (
+            "backend rollout should not be deleted (codex's directory is its own)"
+        )
     finally:
         if fake_rollout.is_file():
             fake_rollout.unlink()

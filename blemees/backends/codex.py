@@ -1113,9 +1113,10 @@ def _sorted_rows(rows: list[dict]) -> list[dict]:
 def session_file_path(_cwd: str | None, _session_id: str) -> Path | None:
     """Return ``None`` — Codex rollout paths are not derivable from
     ``cwd``/``session_id``. The daemon caches the path on
-    :class:`Session` from ``session_configured`` and resolves it via
-    :func:`blemees.session._session_transcript_path` when needed (e.g.
-    ``close{delete:true}``).
+    :class:`Session` from ``session_configured`` (used to surface
+    ``capabilities.rollout_path`` on ``agent.system_init``) but does
+    *not* delete the file on ``close{delete:true}`` — see the
+    docstring on :meth:`SessionTable.remove`.
     """
     return None
 
