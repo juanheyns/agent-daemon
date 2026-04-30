@@ -466,10 +466,7 @@ class ClaudeBackend:
         """
         if self._current_turn_id is not None:
             frame.setdefault("turn_id", self._current_turn_id)
-        if (
-            self._first_token_at_ms is not None
-            and self._turn_started_at_ms is not None
-        ):
+        if self._first_token_at_ms is not None and self._turn_started_at_ms is not None:
             ttft = self._first_token_at_ms - self._turn_started_at_ms
             if ttft >= 0:
                 frame.setdefault("time_to_first_token_ms", ttft)
