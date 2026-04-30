@@ -115,20 +115,6 @@
 }
 
 {
-  "message": {
-    "content": [
-      {
-        "text": "<text>",
-        "type": "text"
-      }
-    ],
-    "role": "user"
-  },
-  "session_id": "<session_id>",
-  "type": "agent.user_echo"
-}
-
-{
   "category": "rate_limits",
   "data": {
     "credits": null,

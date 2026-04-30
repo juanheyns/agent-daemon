@@ -297,7 +297,7 @@ def test_build_argv_maps_many_fields():
         "session_name": "pretty",
         "session_persistence": False,
         "include_partial_messages": True,
-        "replay_user_messages": True,
+        "user_echo": True,
     }
     argv = build_claude_argv("claude", session_id="s1", options=options, for_resume=False)
     joined = " ".join(argv)

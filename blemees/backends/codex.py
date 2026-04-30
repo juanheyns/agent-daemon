@@ -187,8 +187,14 @@ class CodexBackend:
         self._thread_id: str | None = thread_id
 
         # Translator owns the per-turn buffering for the synthesised
-        # `agent.result` (see translate_codex.CodexTranslator).
-        self._translator = CodexTranslator(include_raw=include_raw_events)
+        # `agent.result` (see translate_codex.CodexTranslator). The
+        # `user_echo` toggle is translation-layer only — when False
+        # (default) the translator drops `item_completed{UserMessage}`
+        # so codex matches claude's default-off symmetry.
+        self._translator = CodexTranslator(
+            include_raw=include_raw_events,
+            user_echo=bool(options.get("user_echo", False)),
+        )
 
         # Set when the initialize handshake has completed.
         self._initialized: bool = False
@@ -809,7 +815,9 @@ _VALID_OPTION_KEYS: frozenset[str] = frozenset(
         "developer-instructions",
         "compact-prompt",
         "config",
+        # Translation-layer flags (not codex tool/call arguments).
         "include_raw_events",
+        "user_echo",
     }
 )
 

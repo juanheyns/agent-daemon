@@ -92,6 +92,31 @@ def test_argv_to_resume_is_idempotent_when_already_resume():
 
 
 # ---------------------------------------------------------------------------
+# user_echo option — symmetric default-off across backends
+# ---------------------------------------------------------------------------
+
+
+def test_user_echo_false_by_default_omits_replay_user_messages_flag():
+    """Default: no `agent.user_echo` for the user's input message —
+    matches codex's default-off behaviour (see CodexTranslator)."""
+    argv = build_argv("claude", session_id="s1", options={"tools": ""}, for_resume=False)
+    assert "--replay-user-messages" not in argv
+
+
+def test_user_echo_true_passes_replay_user_messages_flag():
+    """user_echo:true is the unified, cross-backend opt-in — internally
+    maps to CC's --replay-user-messages so the daemon sees the input
+    echo events and forwards them as agent.user_echo."""
+    argv = build_argv(
+        "claude",
+        session_id="s1",
+        options={"tools": "", "user_echo": True},
+        for_resume=False,
+    )
+    assert "--replay-user-messages" in argv
+
+
+# ---------------------------------------------------------------------------
 # Live subprocess interactions (against the fake claude stub).
 # ---------------------------------------------------------------------------
 

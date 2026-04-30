@@ -205,7 +205,11 @@ def test_item_completed_agent_message():
     assert frame["phase"] == "final_answer"
 
 
-def test_item_completed_user_message():
+def test_item_completed_user_message_dropped_when_user_echo_off():
+    """Default: user_echo=False, so item_completed{UserMessage} is
+    suppressed. Symmetric with claude (which only emits user_echo
+    when --replay-user-messages is set).
+    """
     msg = {
         "type": "item_completed",
         "item": {
@@ -214,7 +218,19 @@ def test_item_completed_user_message():
             "content": [{"type": "text", "text": "hi"}],
         },
     }
-    [frame] = CodexTranslator().translate_event(msg, meta=META)
+    assert CodexTranslator().translate_event(msg, meta=META) == []
+
+
+def test_item_completed_user_message_emitted_when_user_echo_on():
+    msg = {
+        "type": "item_completed",
+        "item": {
+            "type": "UserMessage",
+            "id": "u1",
+            "content": [{"type": "text", "text": "hi"}],
+        },
+    }
+    [frame] = CodexTranslator(user_echo=True).translate_event(msg, meta=META)
     assert frame["type"] == "agent.user_echo"
     assert frame["message"]["role"] == "user"
     assert frame["message"]["content"] == [{"type": "text", "text": "hi"}]

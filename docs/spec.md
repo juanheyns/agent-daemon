@@ -429,8 +429,8 @@ extra blocks for other backends are ignored. Unknown keys *inside* an
 | `session_name` | `-n <v>` | |
 | `session_persistence` | `--no-session-persistence` when `false` | |
 | `include_partial_messages` | `--include-partial-messages` | |
-| `replay_user_messages` | `--replay-user-messages` | |
 | `include_raw_events` | n/a — translation-layer flag | When `true`, every `agent.*` frame the daemon emits for this session carries a `raw` field with the un-prefixed CC stream-json dict it was translated from. Default `false`. |
+| `user_echo` | n/a — translation-layer flag | When `true`, the daemon emits `agent.user_echo` for the user's input message — internally maps to CC's `--replay-user-messages`. Default `false`; matches `options.codex.user_echo` so both backends are symmetric out-of-the-box. Tool-result events flow regardless. |
 
 Flags the daemon refuses to pass (always rejected with `unsafe_flag`):
 `--dangerously-skip-permissions`, `--allow-dangerously-skip-permissions`,
@@ -463,6 +463,7 @@ These map directly to fields on `tools/call` arguments for the
 | `compact-prompt` | `compact-prompt` | Prompt used when compacting the conversation. |
 | `config` | `config` | Free-form object, deep-merged over `~/.codex/config.toml`. |
 | `include_raw_events` | n/a — translation-layer flag | When `true`, every `agent.*` frame carries the original `msg` dict from the underlying `notifications/codex/event` under `raw`. Default `false`. |
+| `user_echo` | n/a — translation-layer flag | When `true`, the daemon forwards `item_completed{UserMessage}` as `agent.user_echo`. Default `false`; matches `options.claude.user_echo` so both backends are symmetric out-of-the-box. Tool-result events flow regardless. |
 
 Backend-side process flags also passed by the daemon when relevant:
 

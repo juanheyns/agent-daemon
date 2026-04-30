@@ -45,6 +45,10 @@
     "include_raw_events": {
       "type": "boolean",
       "description": "Translation-layer flag. When true, every agent.* frame for this session carries the original `msg` from the underlying notifications/codex/event under `raw`. Default false."
+    },
+    "user_echo": {
+      "type": "boolean",
+      "description": "Translation-layer flag. When true, the daemon emits agent.user_echo for item_completed{UserMessage} events. Off by default; matches the claude backend's default so both backends are symmetric out-of-the-box. Tool-result events flow regardless."
     }
   },
   "additionalProperties": false

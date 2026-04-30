@@ -144,7 +144,45 @@ async def test_normal_turn_produces_result(monkeypatch):
         # Codex's `cached_input_tokens` renamed to the unified key.
         assert result["usage"]["cache_read_input_tokens"] == 4
         assert result["usage"]["reasoning_output_tokens"] == 2
+        # `user_echo` defaults to False — the fake's
+        # item_completed{UserMessage} is suppressed by the translator,
+        # symmetric with claude's default.
+        assert "agent.user_echo" not in kinds
         assert proc.turn_active is False
+    finally:
+        await proc.close()
+
+
+async def test_user_echo_default_off_drops_user_message_item(monkeypatch):
+    """Default-off symmetry with claude: codex's item_completed{UserMessage}
+    is dropped from the primary stream unless `options.codex.user_echo`
+    is set."""
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", "normal")
+    queue: asyncio.Queue = asyncio.Queue()
+    proc = _make_backend(queue)  # default options → user_echo absent → False
+    await proc.spawn()
+    try:
+        await proc.send_user_turn({"role": "user", "content": "hi"})
+        events = await _drain_until_result(queue)
+        assert not any(e.get("type") == "agent.user_echo" for e in events)
+    finally:
+        await proc.close()
+
+
+async def test_user_echo_true_emits_user_message_item(monkeypatch):
+    """Opt-in: with `options.codex.user_echo=True` the translator
+    forwards item_completed{UserMessage} as agent.user_echo."""
+    monkeypatch.setenv("BLEMEES_FAKE_MODE", "normal")
+    queue: asyncio.Queue = asyncio.Queue()
+    proc = _make_backend(queue, options={"user_echo": True})
+    await proc.spawn()
+    try:
+        await proc.send_user_turn({"role": "user", "content": "hi"})
+        events = await _drain_until_result(queue)
+        echoes = [e for e in events if e.get("type") == "agent.user_echo"]
+        assert len(echoes) == 1
+        assert echoes[0]["message"]["role"] == "user"
+        assert echoes[0]["message"]["content"] == [{"type": "text", "text": "hi"}]
     finally:
         await proc.close()
 

@@ -80,7 +80,7 @@
       "status": "allowed"
     },
     "session_id": "<session_id>",
-    "uuid": "27f1bcc2-fc16-4910-b288-93a07d173936"
+    "uuid": "1aa0027b-0ee8-4493-9668-54ce643f89cc"
   },
   "level": "info",
   "session_id": "<session_id>",

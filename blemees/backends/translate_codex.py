@@ -31,8 +31,13 @@ class CodexTranslator:
     `agent.result`.
     """
 
-    def __init__(self, *, include_raw: bool = False) -> None:
+    def __init__(self, *, include_raw: bool = False, user_echo: bool = False) -> None:
         self._include_raw = include_raw
+        # When False (the default), drop `item_completed{UserMessage}`
+        # from the primary stream so codex matches the daemon's
+        # default-off `user_echo` policy on both backends. Clients that
+        # want the echoes opt in via `options.codex.user_echo: true`.
+        self._user_echo = user_echo
         # Whether `agent.system_init` has been emitted for this backend.
         self._system_init_emitted: bool = False
         # Native session id surfaced on system_init (and used by the
@@ -340,6 +345,10 @@ class CodexTranslator:
     def _user_echo_from_item(
         self, item: dict[str, Any], raw: dict[str, Any] | None
     ) -> list[dict[str, Any]]:
+        if not self._user_echo:
+            # Default: drop. See `__init__` — codex matches claude's
+            # default-off `user_echo` policy unless the client opts in.
+            return []
         content = _normalise_codex_content(item.get("content"))
         echo: dict[str, Any] = {
             "type": "agent.user_echo",

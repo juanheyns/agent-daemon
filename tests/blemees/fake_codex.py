@@ -217,6 +217,26 @@ def _send_delta(thread_id: str, request_id: int, item_id: str, text: str) -> Non
     )
 
 
+def _send_user_message_completed(thread_id: str, request_id: int, prompt: str) -> None:
+    """Mirror real codex's `item_completed{UserMessage}` event for the
+    user's input message — used to exercise the daemon's `user_echo`
+    suppression toggle."""
+    _emit_event(
+        thread_id,
+        request_id,
+        {
+            "type": "item_completed",
+            "thread_id": thread_id,
+            "turn_id": str(request_id),
+            "item": {
+                "type": "UserMessage",
+                "id": f"u_{uuid.uuid4().hex[:12]}",
+                "content": [{"type": "Text", "text": prompt}],
+            },
+        },
+    )
+
+
 def _send_agent_message_completed(thread_id: str, request_id: int, item_id: str, text: str) -> None:
     _emit_event(
         thread_id,
@@ -252,6 +272,7 @@ def _run_normal_turn(
     if first_turn:
         _send_session_configured(thread_id, request_id)
     _send_task_started(thread_id, request_id, str(request_id))
+    _send_user_message_completed(thread_id, request_id, prompt)
     item_id = f"msg_{uuid.uuid4().hex[:12]}"
     reply = prompt if mode == "echo" else f"ok:{prompt}"
     # Stream the reply in two halves to match real Codex behaviour.

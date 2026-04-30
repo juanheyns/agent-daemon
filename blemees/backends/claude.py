@@ -585,9 +585,9 @@ VALID_OPTION_KEYS: frozenset[str] = frozenset(
         "session_name",
         "session_persistence",
         "include_partial_messages",
-        "replay_user_messages",
-        # Translation-layer flag (not a CC CLI flag).
+        # Translation-layer flags (not raw CC CLI flags).
         "include_raw_events",
+        "user_echo",
     }
 )
 
@@ -710,7 +710,11 @@ def build_argv(
         argv.append("--no-session-persistence")
     if f.get("include_partial_messages"):
         argv.append("--include-partial-messages")
-    if f.get("replay_user_messages"):
+    # `user_echo` is the unified, cross-backend opt-in for emitting
+    # `agent.user_echo` frames for the user's input message (codex's
+    # equivalent gate lives in `CodexTranslator`). On Claude this maps
+    # to CC's `--replay-user-messages` flag.
+    if f.get("user_echo"):
         argv.append("--replay-user-messages")
 
     return argv

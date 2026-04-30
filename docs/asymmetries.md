@@ -91,28 +91,33 @@ disappears.
 
 ---
 
-## 4. `agent.user_echo` for tool-result blocks (Claude only)
+## 4. `agent.user_echo` symmetry — *fixed*
 
-**Claude:** `user{message: {content: [..., {type:"tool_result", …}, ...]}}`
-events fan out into one `agent.tool_result` per `tool_result` block,
-plus an `agent.user_echo` containing whatever leftover text blocks
-remained. Real user turns also produce `agent.user_echo`.
+**Status:** resolved. A unified `options.<backend>.user_echo`
+boolean now controls input-echo behaviour symmetrically. Default
+**false** for both backends — neither emits `agent.user_echo` for
+the user's input message unless the client opts in.
 
-**Codex:** `item_completed{UserMessage}` produces a single
-`agent.user_echo`. Codex doesn't have the "user message that's
-actually a list of tool results" pattern — tool results are emitted
-as `exec_command_end` events (which become `agent.tool_result`).
+* **Claude:** `user_echo:true` passes CC's `--replay-user-messages`,
+  so CC re-emits the user input which the existing translator
+  forwards as `agent.user_echo`.
+* **Codex:** `user_echo:true` switches `CodexTranslator` from
+  dropping `item_completed{UserMessage}` to emitting it as
+  `agent.user_echo`.
 
-**Why we left it alone:** the shapes are different because the
-underlying mental models are different. CC's "tool results live
-inside a synthetic user turn" is an Anthropic Messages API
-convention; Codex's "tool results are first-class events" is an MCP
-convention. Forcing one into the other would lose information either
-way.
+Tool-result events (CC's tool_result-bearing `user` frames; codex's
+`exec_command_*` events) are independent of this toggle and continue
+to surface as `agent.tool_result` either way — they're how the
+backends communicate tool execution results back to the model, not
+input echoes. The latent CC tool_result fan-out → `agent.tool_result`
++ optional `agent.user_echo` shape mentioned in
+`translate_claude._translate_user` is preserved.
 
-**Future option:** none worth pursuing. Document the difference;
-clients that consume `agent.user_echo` for analytics can already
-filter by whether the same turn produced `agent.tool_result` frames.
+Pinned by `test_user_echo_*` in
+`tests/blemees/test_backend_{claude,codex}.py` and
+`tests/blemees/test_translate_codex.py`. Pre-1.0 breaking rename:
+`options.claude.replay_user_messages` is gone; clients should use
+`user_echo` instead.
 
 ---
 

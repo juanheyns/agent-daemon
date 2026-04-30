@@ -43,7 +43,7 @@ either appear with a value or are omitted entirely.
 | `agent.system_init` | First frame after spawn. Tells the client which backend, model, cwd, tools, and native session id are in play. | `model?, cwd?, tools?, native_session_id?, capabilities?, context_window?` |
 | `agent.delta` | Incremental output during a turn. | `kind: "text" \| "thinking" \| "tool_input"`, plus one of: `text` (text/thinking) or `partial_json` (tool_input). May carry `item_id?` (Codex) or `index?` (CC content-block index) for clients that want to reassemble. |
 | `agent.message` | A complete message from the assistant role (post-stream). | `role: "assistant", content: [...], phase?` |
-| `agent.user_echo` | Echo of a user-side message the backend replays in its event stream — useful for logging, not for the original turn. CC emits these for both real user turns and for tool-result blocks; Codex emits them for the user message after the turn starts. | `message: { role:"user", content:... }` |
+| `agent.user_echo` | Echo of the user's input message. **Off by default on both backends** — opt in via `options.<backend>.user_echo: true`. (Claude additionally emits user-frame fan-outs for tool-result-bearing `user` events regardless of the toggle — see the translation table below.) | `message: { role:"user", content:... }` |
 | `agent.tool_use` | A tool invocation request emitted by the model. | `tool_use_id, name, input` |
 | `agent.tool_result` | The result the backend received for a tool invocation. | `tool_use_id, output, is_error?` |
 | `agent.notice` | Backend-side informational events that are neither output nor errors — `mcp_startup_*` from codex, rate-limit pings, etc. Clients may ignore. | `level: "info" \| "warn", category: string, text?, data?` |
@@ -130,8 +130,8 @@ splitting — see [`docs/asymmetries.md`](asymmetries.md).
 | `stream_event{message_stop}` | dropped | |
 | `assistant{message}` | `agent.message{role:"assistant", content: message.content}` | |
 | `partial_assistant{message}` | dropped (only `--include-partial-messages` produces these; redundant once we emit deltas) | |
-| `user{message: {content: string \| [text-only]}}` | `agent.user_echo{message}` | |
-| `user{message: {content: [..., {type:"tool_result", tool_use_id, content, is_error}, ...]}}` | one `agent.tool_result{tool_use_id, output:content, is_error}` per `tool_result` block; remaining text blocks emit a single `agent.user_echo`. | |
+| `user{message: {content: string \| [text-only]}}` | `agent.user_echo{message}` | Only when `options.claude.user_echo:true` (passes `--replay-user-messages` to CC). Off by default. |
+| `user{message: {content: [..., {type:"tool_result", tool_use_id, content, is_error}, ...]}}` | one `agent.tool_result{tool_use_id, output:content, is_error}` per `tool_result` block; remaining text blocks emit a single `agent.user_echo`. | Tool-result fan-out happens regardless of `user_echo`; the surrounding text echo follows the same toggle as the row above. |
 | `result{subtype, duration_ms, num_turns, usage}` | `agent.result{subtype, duration_ms, num_turns, turn_id, time_to_first_token_ms?, usage: <pass-through>}` | `turn_id` is the per-turn UUID hex; `time_to_first_token_ms` is daemon-side wall-clock from `send_user_turn` to the first `agent.delta`. Both daemon-synthesised. |
 | (synth, daemon-side; CC subprocess crashed mid-turn) | `agent.result{subtype:"error", num_turns:1, turn_id, time_to_first_token_ms?, error:{code:"backend_crashed", message}}` | Emitted alongside `blemeesd.error{backend_crashed}` so clients waiting on `agent.result` see a clean turn close (spec §5.6 invariant). |
 | (synth, daemon-side; CC stderr matched auth-failure pattern mid-turn) | `agent.result{subtype:"error", num_turns:1, turn_id, time_to_first_token_ms?, error:{code:"auth_failed", message}}` | Emitted alongside `blemeesd.error{auth_failed}`. |
@@ -153,7 +153,7 @@ originating `tools/call`, plus the preceding `task_complete` and last
 | `task_started` | `agent.notice{level:"info", category:"task_started", data:{turn_id, model_context_window, started_at}}` *or* fold `model_context_window` into `agent.system_init` if not yet emitted | We chose: fold context window into init when known; emit notice with `turn_id`. |
 | `raw_response_item` | dropped from primary stream; surfaced under `raw` when opt-in | Duplicates the structured `item_*` events. |
 | `item_started{item:{type:"UserMessage", content}}` | dropped (we wait for completed) | |
-| `item_completed{item:{type:"UserMessage", content}}` | `agent.user_echo{message:{role:"user", content: <translated>}}` | |
+| `item_completed{item:{type:"UserMessage", content}}` | `agent.user_echo{message:{role:"user", content: <translated>}}` | Only when `options.codex.user_echo:true`. Off by default — translator drops the frame. |
 | `item_started{item:{type:"AgentMessage", id, content}}` | dropped (we emit deltas as they arrive) | |
 | `item_completed{item:{type:"AgentMessage", id, content, phase}}` | `agent.message{role:"assistant", content: <translated>, phase}` | |
 | `item_started{item:{type:"Reasoning", id}}` / `item_completed{item:{type:"Reasoning", ...}}` | dropped from primary stream | Encrypted reasoning is opaque; appears under `raw`. |
