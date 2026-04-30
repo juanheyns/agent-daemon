@@ -1,0 +1,109 @@
+# backend: claude
+# prompt: 'Reply with exactly: pong'
+# redacted: timestamps, durations, IDs, token counts, model reply text, and the top-level `backend`/`seq` fields are normalised so a plain `diff` highlights only structural / naming differences.
+# generator: scripts/transcript_compare.py
+
+{
+  "backends": {
+    "claude": "2.1.123",
+    "codex": "0.125.0"
+  },
+  "daemon": "<daemon_version>",
+  "pid": "<pid>",
+  "protocol": "blemees/2",
+  "type": "blemeesd.hello_ack"
+}
+
+{
+  "id": "<req_id>",
+  "last_seq": 0,
+  "native_session_id": "<native_session_id_1>",
+  "session_id": "<session_id>",
+  "subprocess_pid": "<pid>",
+  "type": "blemeesd.opened"
+}
+
+{
+  "category": "task_started",
+  "data": {
+    "started_at_ms": "<ts>",
+    "turn_id": "<turn_id_1>"
+  },
+  "level": "info",
+  "session_id": "<session_id>",
+  "type": "agent.notice"
+}
+
+{
+  "capabilities": {
+    "permission_mode": "bypassPermissions",
+    "rollout_path": "<rollout_path>"
+  },
+  "cwd": "<cwd>",
+  "model": "<model>",
+  "native_session_id": "<native_session_id_1>",
+  "session_id": "<session_id>",
+  "tools": [
+    "mcp__claude_ai_Asana__authenticate",
+    "mcp__claude_ai_Asana__complete_authentication",
+    "mcp__claude_ai_Atlassian__authenticate",
+    "mcp__claude_ai_Atlassian__complete_authentication",
+    "mcp__claude_ai_Box__authenticate",
+    "mcp__claude_ai_Box__complete_authentication",
+    "mcp__claude_ai_Canva__authenticate",
+    "mcp__claude_ai_Canva__complete_authentication",
+    "mcp__claude_ai_HubSpot__authenticate",
+    "mcp__claude_ai_HubSpot__complete_authentication",
+    "mcp__claude_ai_Intercom__authenticate",
+    "mcp__claude_ai_Intercom__complete_authentication",
+    "mcp__claude_ai_Linear__authenticate",
+    "mcp__claude_ai_Linear__complete_authentication",
+    "mcp__claude_ai_monday_com__authenticate",
+    "mcp__claude_ai_monday_com__complete_authentication",
+    "mcp__claude_ai_Notion__authenticate",
+    "mcp__claude_ai_Notion__complete_authentication",
+    "mcp__claude_ai_Slack__authenticate",
+    "mcp__claude_ai_Slack__complete_authentication"
+  ],
+  "type": "agent.system_init"
+}
+
+{
+  "category": "claude_unknown_rate_limit_event",
+  "level": "info",
+  "session_id": "<session_id>",
+  "type": "agent.notice"
+}
+
+{
+  "content": [
+    {
+      "text": "<text>",
+      "type": "text"
+    }
+  ],
+  "role": "assistant",
+  "session_id": "<session_id>",
+  "type": "agent.message"
+}
+
+{
+  "duration_ms": "<ms>",
+  "num_turns": 1,
+  "session_id": "<session_id>",
+  "subtype": "success",
+  "turn_id": "<turn_id_1>",
+  "type": "agent.result",
+  "usage": {
+    "cache_creation_input_tokens": "<int>",
+    "cache_read_input_tokens": "<int>",
+    "input_tokens": "<int>",
+    "output_tokens": "<int>"
+  }
+}
+
+{
+  "id": "<req_id>",
+  "session_id": "<session_id>",
+  "type": "blemeesd.closed"
+}

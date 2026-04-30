@@ -1,0 +1,186 @@
+# backend: codex
+# prompt: 'Reply with exactly: pong'
+# redacted: timestamps, durations, IDs, token counts, model reply text, and the top-level `backend`/`seq` fields are normalised so a plain `diff` highlights only structural / naming differences.
+# generator: scripts/transcript_compare.py
+
+{
+  "backends": {
+    "claude": "2.1.123",
+    "codex": "0.125.0"
+  },
+  "daemon": "<daemon_version>",
+  "pid": "<pid>",
+  "protocol": "blemees/2",
+  "type": "blemeesd.hello_ack"
+}
+
+{
+  "id": "<req_id>",
+  "last_seq": 0,
+  "session_id": "<session_id>",
+  "subprocess_pid": "<pid>",
+  "type": "blemeesd.opened"
+}
+
+{
+  "capabilities": {
+    "approval_policy": "never",
+    "permission_profile": {
+      "file_system": {
+        "entries": [
+          {
+            "access": "read",
+            "path": {
+              "type": "special",
+              "value": {
+                "kind": "root"
+              }
+            }
+          }
+        ],
+        "type": "restricted"
+      },
+      "network": "restricted",
+      "type": "managed"
+    },
+    "reasoning_effort": "high",
+    "rollout_path": "<rollout_path>",
+    "sandbox_policy": {
+      "type": "read-only"
+    }
+  },
+  "cwd": "<cwd>",
+  "model": "<model>",
+  "native_session_id": "<native_session_id_1>",
+  "session_id": "<session_id>",
+  "type": "agent.system_init"
+}
+
+{
+  "category": "backend_mcp_startup",
+  "data": {
+    "server": "codex_apps",
+    "status": {
+      "state": "starting"
+    }
+  },
+  "level": "info",
+  "session_id": "<session_id>",
+  "type": "agent.notice"
+}
+
+{
+  "category": "task_started",
+  "data": {
+    "model_context_window": 258400,
+    "started_at": "<ts>",
+    "turn_id": "<turn_id_1>"
+  },
+  "level": "info",
+  "session_id": "<session_id>",
+  "type": "agent.notice"
+}
+
+{
+  "category": "backend_mcp_startup",
+  "data": {
+    "server": "codex_apps",
+    "status": {
+      "state": "ready"
+    }
+  },
+  "level": "info",
+  "session_id": "<session_id>",
+  "type": "agent.notice"
+}
+
+{
+  "category": "backend_mcp_startup_complete",
+  "data": {
+    "cancelled": [],
+    "failed": [],
+    "ready": [
+      "codex_apps"
+    ]
+  },
+  "level": "info",
+  "session_id": "<session_id>",
+  "type": "agent.notice"
+}
+
+{
+  "message": {
+    "content": [
+      {
+        "text": "<text>",
+        "type": "text"
+      }
+    ],
+    "role": "user"
+  },
+  "session_id": "<session_id>",
+  "type": "agent.user_echo"
+}
+
+{
+  "category": "rate_limits",
+  "data": {
+    "credits": null,
+    "limit_id": "codex",
+    "limit_name": null,
+    "plan_type": "free",
+    "primary": {
+      "resets_at": 1777599825,
+      "used_percent": 47.0,
+      "window_minutes": 10080
+    },
+    "rate_limit_reached_type": null,
+    "secondary": null
+  },
+  "level": "info",
+  "session_id": "<session_id>",
+  "type": "agent.notice"
+}
+
+{
+  "item_id": "<item_id_1>",
+  "kind": "text",
+  "session_id": "<session_id>",
+  "text": "<text>",
+  "type": "agent.delta"
+}
+
+{
+  "content": [
+    {
+      "text": "<text>",
+      "type": "text"
+    }
+  ],
+  "phase": "final_answer",
+  "role": "assistant",
+  "session_id": "<session_id>",
+  "type": "agent.message"
+}
+
+{
+  "duration_ms": "<ms>",
+  "num_turns": 1,
+  "session_id": "<session_id>",
+  "subtype": "success",
+  "time_to_first_token_ms": "<ms>",
+  "turn_id": "<turn_id_1>",
+  "type": "agent.result",
+  "usage": {
+    "cache_read_input_tokens": "<int>",
+    "input_tokens": "<int>",
+    "output_tokens": "<int>",
+    "reasoning_output_tokens": "<int>"
+  }
+}
+
+{
+  "id": "<req_id>",
+  "session_id": "<session_id>",
+  "type": "blemeesd.closed"
+}
