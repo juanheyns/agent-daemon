@@ -4,7 +4,7 @@ nav_order: 3
 permalink: /schemas/
 ---
 
-<!-- Auto-synced from blemees/schemas/README.md by .github/workflows/docs-sync.yml. -->
+<!-- Auto-synced from blemees_agent/schemas/README.md by .github/workflows/docs-sync.yml. -->
 
 # blemees — wire-frame JSON Schemas
 
