@@ -27,7 +27,7 @@ landed: `requires_codex` pytest mark + `tests/blemees/test_daemon_e2e_codex.py`,
 `blemees/bench.py` rewritten with `--backend {claude,codex}`, structured
 JSON-RPC auth-error classification (`error.data.code` /
 `error.data.type` / message-pattern), mixed-backend
-`blemeesd.status_reply.sessions.by_backend` test, `BLEMEESD_CODEX`
+`blemeesd.status_reply.sessions.by_backend` test, `BLEMEES_AGENTD_CODEX`
 documented in both the systemd unit and the launchd plist, the
 existing `requires_claude` e2e suite migrated off the legacy `blemees/1`
 open shape, and the Codex `turn_aborted` event wired into
@@ -225,9 +225,9 @@ indistinguishable in shape from the Claude backend's.
 
 **Packaging:**
 
-- `packaging/blemeesd/blemeesd.service` — add a comment
-  documenting `BLEMEESD_CODEX` for users with non-PATH installs.
-- `packaging/blemeesd/com.blemees.blemeesd.plist` — same.
+- `packaging/blemees-agentd/blemees-agentd.service` — add a comment
+  documenting `BLEMEES_AGENTD_CODEX` for users with non-PATH installs.
+- `packaging/blemees-agentd/com.blemees.blemees-agentd.plist` — same.
 
 ---
 

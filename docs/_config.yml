@@ -1,4 +1,4 @@
-title: blemeesd
+title: blemees-agentd
 description: Headless agent daemon exposing `claude -p` over a Unix socket.
 remote_theme: pages-themes/midnight@v0.2.0
 plugins:
@@ -17,4 +17,4 @@ exclude:
 
 show_downloads: true
 github:
-  repository_url: https://github.com/blemees/blemees-daemon
+  repository_url: https://github.com/blemees/blemees-agent

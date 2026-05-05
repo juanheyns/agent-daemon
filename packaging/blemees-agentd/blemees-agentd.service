@@ -1,0 +1,16 @@
+[Unit]
+Description=Headless agent daemon
+After=default.target
+
+[Service]
+ExecStart=%h/.local/bin/blemees-agentd
+Restart=on-failure
+RestartSec=2s
+# If `claude` or `codex` aren't on the daemon's PATH, point at them
+# explicitly via the matching env vars. Both default to the bare
+# binary name resolved through PATH.
+# Environment=BLEMEES_AGENTD_CLAUDE=%h/.local/bin/claude
+# Environment=BLEMEES_AGENTD_CODEX=%h/.local/bin/codex
+
+[Install]
+WantedBy=default.target

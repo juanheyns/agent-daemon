@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "blemees"
+name = "blemees-agent"
 version = "0.10.0"
 description = "Headless agent daemon exposing local agent CLIs (Claude Code, Codex) over a Unix socket."
 readme = "README.md"
@@ -25,14 +25,12 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-blemeesd = "blemees.__main__:main"
-blemeesctl = "blemees.cli:main"
-# `blemees` is intentionally NOT registered here. From 0.9.0 onward
-# that name belongs to the chat TUI shipped by the `blemees-tui`
-# package. Users who installed daemon 0.8.x and earlier had `blemees`
-# as the wire-protocol REPL; that role is now `blemeesctl`. Side-by-side
-# install of `blemees` (daemon) and `blemees-tui` would otherwise have
-# both packages fighting over the `blemees` console_script.
+blemees-agentd = "blemees_agent.__main__:main"
+blemees-agentctl = "blemees_agent.cli:main"
+# `blemees` is intentionally NOT registered here. That name belongs to
+# the chat TUI shipped by the `blemees-tui` package; the wire-protocol
+# REPL role lives at `blemees-agentctl` so the two packages can be
+# installed side-by-side without fighting over a shared console_script.
 
 [project.optional-dependencies]
 dev = [
@@ -43,12 +41,12 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["blemees*"]
+include = ["blemees_agent*"]
 
 [tool.setuptools.package-data]
 # Ship the JSON Schemas (and their README) inside the wheel so clients
-# can resolve them via `importlib.resources.files("blemees.schemas")`.
-"blemees.schemas" = ["*.json", "*.md", "inbound/*.json", "outbound/*.json"]
+# can resolve them via `importlib.resources.files("blemees_agent.schemas")`.
+"blemees_agent.schemas" = ["*.json", "*.md", "inbound/*.json", "outbound/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -61,7 +59,7 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["tests/blemees/fake_claude.py"]
+extend-exclude = ["tests/blemees_agent/fake_claude.py"]
 
 [tool.ruff.lint]
 # Keep the starter set conservative so adoption doesn't snowball into a big
@@ -76,7 +74,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B011"]     # assert False is OK in tests
-"blemees/subprocess.py" = ["A005"]  # stdlib shadowing intentional
+"blemees_agent/subprocess.py" = ["A005"]  # stdlib shadowing intentional
 
 [tool.ruff.lint.isort]
 # Keep aliased imports grouped under a single from-clause rather than

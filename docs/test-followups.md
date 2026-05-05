@@ -31,7 +31,7 @@ on-disk transcript ends up under pytest's tmp dir.
 ### 2. Replay gap when `last_seen_seq` is too old
 
 Ring buffer default is 1024 frames per session
-(`BLEMEESD_RING_BUFFER_SIZE`). When a reattach asks for `last_seen_seq`
+(`BLEMEES_AGENTD_RING_BUFFER_SIZE`). When a reattach asks for `last_seen_seq`
 that's older than the oldest buffered frame, the daemon emits
 `blemeesd.replay_gap{since_seq, first_available_seq}` once before live
 delivery (spec §5.11).
@@ -42,7 +42,7 @@ delivery (spec §5.11).
 - Reconnect with `last_seen_seq=1`. Expect a single `replay_gap` frame
   followed by replay starting at `first_available_seq`.
 
-**Plumbing:** spawn a `Daemon` with `BLEMEESD_RING_BUFFER_SIZE=4` (or
+**Plumbing:** spawn a `Daemon` with `BLEMEES_AGENTD_RING_BUFFER_SIZE=4` (or
 config-equivalent) so 5 trivial turns blow the ring. Real claude can
 generate 4+ frames in a single turn (system_init + delta + message +
 result) so this might land in 1–2 turns. With small ring sizes the
@@ -113,7 +113,7 @@ Spec §9.2: each backend has its own auth detection. Claude greps
 stderr for `401`, `OAuth token expired`, etc. Codex parses JSON-RPC
 errors with auth-related codes.
 
-**Approach (claude):** Run with a dummy `BLEMEESD_CLAUDE` script that
+**Approach (claude):** Run with a dummy `BLEMEES_AGENTD_CLAUDE` script that
 prints "401: Unauthorized" to stderr and exits non-zero. Daemon
 should emit `blemeesd.error{code:auth_failed, message:"Run \`claude
 auth\` …"}` and not retry.
@@ -141,7 +141,7 @@ the connection.
 - On the test side, **stop reading** the socket but keep it open.
 - After 30 s, expect the daemon to emit `slow_consumer` and close.
 
-**Cost:** ~35 s per run. Pin to `BLEMEESD_SLOW_CONSUMER_TIMEOUT=2`
+**Cost:** ~35 s per run. Pin to `BLEMEES_AGENTD_SLOW_CONSUMER_TIMEOUT=2`
 (if exposed) to make it cheap.
 
 ### 8. `oversize_message`

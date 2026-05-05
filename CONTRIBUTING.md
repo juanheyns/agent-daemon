@@ -1,4 +1,4 @@
-# Contributing to blemeesd
+# Contributing to blemees-agentd
 
 Thanks for your interest. This document covers the dev loop, what CI
 enforces, and how we shape commits and PRs.
@@ -17,7 +17,7 @@ uv pip install -e ".[dev]"     # or: pip install -e ".[dev]"
 Run the daemon locally for smoke testing:
 
 ```bash
-blemeesd --log-level debug
+blemees-agentd --log-level debug
 ```
 
 ## Tests and lint
@@ -54,7 +54,7 @@ while working, open a separate issue or PR rather than bundling them in.
 
 ## Protocol changes
 
-If your change touches the wire protocol (any `claude.*` / `blemeesd.*`
+If your change touches the wire protocol (any `claude.*` / `blemees-agentd.*`
 frame shape, session lifecycle, error codes), also update:
 
 - `README.md` §§ 3–9 (the spec lives here),

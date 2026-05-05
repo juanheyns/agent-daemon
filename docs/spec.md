@@ -6,7 +6,7 @@ permalink: /spec/
 
 <!-- Auto-synced from README.md by .github/workflows/docs-sync.yml. Edit the root README. -->
 
-# blemeesd — Headless agent daemon
+# blemees-agentd — Headless agent daemon
 
 **Version:** 0.1
 **Protocol:** `blemees/2`
@@ -23,8 +23,8 @@ Machine-readable JSON Schemas live under [`blemees/schemas/`](blemees/schemas/) 
 Python 3.11+. No runtime dependencies outside the standard library.
 At least one of the supported agent backends must be on `$PATH`:
 
-* **Claude Code** — `claude` binary (override with `--claude` / `BLEMEESD_CLAUDE`).
-* **Codex** — `codex` binary, version 0.125+ for `codex mcp-server` (override with `--codex` / `BLEMEESD_CODEX`).
+* **Claude Code** — `claude` binary (override with `--claude` / `BLEMEES_AGENTD_CLAUDE`).
+* **Codex** — `codex` binary, version 0.125+ for `codex mcp-server` (override with `--codex` / `BLEMEES_AGENTD_CODEX`).
 
 The daemon picks the backend per session, on `blemeesd.open`. A daemon
 without `claude` on `$PATH` can still serve `backend:"codex"` sessions
@@ -60,9 +60,9 @@ uv pip install -e ".[dev]"      # or: pip install -e ".[dev]"
 Run in the foreground:
 
 ```bash
-blemeesd                          # socket at $XDG_RUNTIME_DIR/blemeesd.sock
-blemeesd --socket /tmp/blemeesd.sock
-blemeesd --log-level debug
+blemees-agentd                          # socket at $XDG_RUNTIME_DIR/blemees/agentd.sock
+blemees-agentd --socket /tmp/blemees-agentd.sock
+blemees-agentd --log-level debug
 ```
 
 Socket permissions are `0600`. Anyone who can `connect()` the socket has
@@ -72,17 +72,17 @@ full access to your Claude subscription, so guard it like an SSH agent.
 
 ```bash
 mkdir -p ~/.config/systemd/user/
-cp packaging/blemeesd/blemeesd.service ~/.config/systemd/user/
+cp packaging/blemees-agentd/blemees-agentd.service ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable --now blemeesd
-journalctl --user -u blemeesd -f
+systemctl --user enable --now blemees-agentd
+journalctl --user -u blemees-agentd -f
 ```
 
 ### launchd (macOS)
 
 ```bash
-cp packaging/blemeesd/com.blemees.blemeesd.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.blemees.blemeesd.plist
+cp packaging/blemees-agentd/com.blemees.blemees-agentd.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.blemees.blemees-agentd.plist
 ```
 
 ### `brew services` (after `brew install`)
@@ -94,9 +94,9 @@ brew services start blemees
 The Homebrew formula ships a service stanza so the daemon runs at login
 without you touching launchd by hand.
 
-### Smoke-test the wire (`blemeesctl`)
+### Smoke-test the wire (`blemees-agentctl`)
 
-The package also ships `blemeesctl`, an interactive REPL that maps
+The package also ships `blemees-agentctl`, an interactive REPL that maps
 each command to one outbound wire frame and prints every inbound
 frame. It's not a chat UI — it's how you poke the protocol,
 sanity-check an install, or reproduce a bug from a known sequence of
@@ -106,22 +106,22 @@ frames.
 > The `blemees` console_script is no longer registered by the daemon
 > wheel; it's reserved for the chat TUI shipped by the
 > [`blemees-tui`](https://github.com/blemees/blemees-tui) package. If
-> muscle-memory has you typing `blemees`, retrain to `blemeesctl`.
+> muscle-memory has you typing `blemees`, retrain to `blemees-agentctl`.
 
 ```
-$ blemeesctl
-· connected: /tmp/blemeesd-501.sock
-→ {"type":"blemeesd.hello","client":"blemeesctl/0.9.0","protocol":"blemees/2"}
-← blemeesd.hello_ack  {"daemon":"blemeesd/0.9.0","backends":{"claude":"2.1.118","codex":"0.125.0"},…}
-blemeesctl> status
+$ blemees-agentctl
+· connected: /tmp/blemees-agentd-501.sock
+→ {"type":"blemeesd.hello","client":"blemees-agentctl/0.9.0","protocol":"blemees/2"}
+← blemeesd.hello_ack  {"daemon":"blemees-agentd/0.9.0","backends":{"claude":"2.1.118","codex":"0.125.0"},…}
+blemees-agentctl> status
 ← blemeesd.status_reply  {"uptime_s":12.4,"connections":1,…}
-blemeesctl> open new backend=claude options.model=sonnet options.permission_mode=bypassPermissions
+blemees-agentctl> open new backend=claude options.model=sonnet options.permission_mode=bypassPermissions
 · session_id: 5a01f0d8-…
 ← blemeesd.opened  …
-blemeesctl> send 5a01f0d8-… what is 2+2?
+blemees-agentctl> send 5a01f0d8-… what is 2+2?
 ← agent.delta {"backend":"claude","kind":"text","text":"4"}
 ← agent.result {"backend":"claude","subtype":"success","duration_ms":…}
-blemeesctl> close 5a01f0d8-…
+blemees-agentctl> close 5a01f0d8-…
 ```
 
 `help` at the prompt lists every verb. Highlights: `open` / `resume` /
@@ -133,7 +133,7 @@ sends an arbitrary JSON frame for protocol experiments.
 
 ## 1. Overview
 
-`blemeesd` is a per-user daemon that exposes one or more agent backends
+`blemees-agentd` is a per-user daemon that exposes one or more agent backends
 — currently Claude Code (`claude -p`) and Codex (`codex mcp-server`) — as a
 long-running, multi-session backend over a Unix domain socket. It is a
 thin, general-purpose wrapper: clients get a headless agent they can
@@ -183,7 +183,7 @@ event type without branching by backend.
   prompt. The daemon does not parse assistant output.
 - Cross-backend session migration (resume a Claude session on Codex,
   etc.). Each backend owns its own session storage.
-- Multi-user daemons. One `blemeesd` per OS user. Socket perms (0600) are the
+- Multi-user daemons. One `blemees-agentd` per OS user. Socket perms (0600) are the
   only access control.
 - Remote access (TCP/TLS). Use SSH socket forwarding if needed.
 - Running `claude` or `codex` interactively (without programmatic stdio).
@@ -197,9 +197,9 @@ event type without branching by backend.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ blemeesd (single asyncio event loop)                         │
+│ blemees-agentd (single asyncio event loop)                         │
 │                                                              │
-│   UnixServer  listens on $XDG_RUNTIME_DIR/blemeesd.sock      │
+│   UnixServer  listens on $XDG_RUNTIME_DIR/blemees/agentd.sock      │
 │      │                                                       │
 │      ├─ Connection 1                                         │
 │      │    ├─ Session s_abc  → ClaudeBackend (claude -p)      │
@@ -259,7 +259,7 @@ tests/blemees/
 ```
 
 Package is self-contained (no external imports outside stdlib). A console
-script `blemeesd` in `pyproject.toml` maps to `python -m blemees`.
+script `blemees-agentd` in `pyproject.toml` maps to `python -m blemees`.
 
 ---
 
@@ -286,12 +286,12 @@ Clients using `BlemeesClient.connect()` (and the daemon itself for its own
 default) resolve the socket path in this order of precedence, stopping at
 the first match:
 
-1. `$BLEMEESD_SOCKET` — explicit override, wins everywhere.
-2. `$XDG_RUNTIME_DIR/blemeesd.sock` — typical on Linux user sessions.
-3. `/tmp/blemeesd-<uid>.sock` — macOS and Linux without XDG.
+1. `$BLEMEES_AGENTD_SOCKET` — explicit override, wins everywhere.
+2. `$XDG_RUNTIME_DIR/blemees/agentd.sock` — typical on Linux user sessions.
+3. `/tmp/blemees-agentd-<uid>.sock` — macOS and Linux without XDG.
 
-Only set `BLEMEESD_SOCKET` in the client's environment when the daemon
-was started with a non-default path (e.g. via `blemeesd --socket …`).
+Only set `BLEMEES_AGENTD_SOCKET` in the client's environment when the daemon
+was started with a non-default path (e.g. via `blemees-agentd --socket …`).
 
 ### 5.2 Message namespacing
 
@@ -299,7 +299,7 @@ Every `type` on the wire carries an explicit namespace prefix:
 
 | Prefix | Emitted by | Purpose |
 |---|---|---|
-| `blemeesd.*` | client → daemon, daemon → client | Session lifecycle and daemon operations: `hello`, `hello_ack`, `open`, `opened`, `close`, `closed`, `interrupt`, `interrupted`, `error`, `stderr`, `replay_gap`, `list_sessions`, `sessions`, `ping`, `pong`, `status`, `status_reply`, `watch`, `watching`, `unwatch`, `unwatched`, `session_taken`, `session_closed`, `session_info`, `session_info_reply`. |
+| `blemees-agentd.*` | client → daemon, daemon → client | Session lifecycle and daemon operations: `hello`, `hello_ack`, `open`, `opened`, `close`, `closed`, `interrupt`, `interrupted`, `error`, `stderr`, `replay_gap`, `list_sessions`, `sessions`, `ping`, `pong`, `status`, `status_reply`, `watch`, `watching`, `unwatch`, `unwatched`, `session_taken`, `session_closed`, `session_info`, `session_info_reply`. |
 | `agent.*` | client → daemon, daemon → client | Conversation messages, normalised across backends. Inbound (`agent.user`) is the client's user turn, which the daemon hands to the backend's native input mechanism (CC: stream-json stdin; Codex: `tools/call`). Outbound is the daemon's translated event stream: `agent.system_init`, `agent.delta`, `agent.message`, `agent.user_echo`, `agent.tool_use`, `agent.tool_result`, `agent.notice`, `agent.result`. Every outbound `agent.*` frame carries a `backend: "claude" \| "codex"` field; clients that want backend-native fidelity can opt into a `raw` field per session via `options.<backend>.include_raw_events: true`. The full type-by-type translation table is in [`docs/agent-events.md`](docs/agent-events.md). |
 
 Rationale: two stable namespaces — one for session lifecycle, one for
@@ -318,7 +318,7 @@ Daemon replies:
 ```json
 {
   "type":"blemeesd.hello_ack",
-  "daemon":"blemeesd/0.1",
+  "daemon":"blemees-agentd/0.1",
   "protocol":"blemees/2",
   "pid":12345,
   "backends":{
@@ -735,7 +735,7 @@ Error codes the client must handle:
 |---|---|---|
 | `protocol_mismatch` | Incompatible protocol version. | Yes. |
 | `invalid_message` | Malformed JSON or bad field. | No. |
-| `unknown_message` | Unknown `blemeesd.*` type. | No. |
+| `unknown_message` | Unknown `blemees-agentd.*` type. | No. |
 | `unknown_backend` | `blemeesd.open.backend` is not a backend the daemon knows. | No. |
 | `unsafe_flag` | Client requested a refused flag. | No. |
 | `session_unknown` | No such session. | No. |
@@ -757,7 +757,7 @@ Error codes the client must handle:
 ### 5.11 Event stream durability (seq, ring buffer, replay)
 
 Every outbound frame the daemon emits for a session — translated
-`agent.*` events and synthetic `blemeesd.*` frames alike — carries a
+`agent.*` events and synthetic `blemees-agentd.*` frames alike — carries a
 monotonic integer `seq`, assigned by the session and starting at 1.
 `blemeesd.opened` additionally carries `last_seq` so a reconnecting
 client knows the highest seq the session has produced.
@@ -765,10 +765,10 @@ client knows the highest seq the session has produced.
 Recent frames are retained in two places:
 
 * **In-memory ring buffer**, per session, bounded (default 1024;
-  `BLEMEESD_RING_BUFFER_SIZE`). Always on. Survives client disconnects
+  `BLEMEES_AGENTD_RING_BUFFER_SIZE`). Always on. Survives client disconnects
   but not daemon restarts.
 * **Durable event log**, per session, opt-in
-  (`BLEMEESD_EVENT_LOG_DIR`). Append-only JSONL at
+  (`BLEMEES_AGENTD_EVENT_LOG_DIR`). Append-only JSONL at
   `<dir>/<session>.jsonl`. On session reopen the ring is seeded from
   the log's tail, so replay survives daemon restarts. `close
   {delete:true}` unlinks the log.
@@ -819,9 +819,9 @@ Daemon:
 ```json
 {
   "type":"blemeesd.status_reply","id":"req_2",
-  "daemon":"blemeesd/0.1.0","protocol":"blemees/2","pid":12345,
+  "daemon":"blemees-agentd/0.1.0","protocol":"blemees/2","pid":12345,
   "uptime_s":127.3,
-  "socket_path":"/run/user/1000/blemeesd.sock",
+  "socket_path":"/run/user/1000/blemees/agentd.sock",
   "backends":{"claude":"2.1.118","codex":"0.125.0"},
   "connections":3,
   "sessions":{
@@ -1229,8 +1229,8 @@ resume preserves context across reattach; Codex does not.
 
 ## 7. Security
 
-- **Socket path:** `$XDG_RUNTIME_DIR/blemeesd.sock` on Linux. On macOS, which
-  lacks `$XDG_RUNTIME_DIR`, use `/tmp/blemeesd-$UID.sock`. Configurable via
+- **Socket path:** `$XDG_RUNTIME_DIR/blemees/agentd.sock` on Linux. On macOS, which
+  lacks `$XDG_RUNTIME_DIR`, use `/tmp/blemees-agentd-$UID.sock`. Configurable via
   `--socket`.
 - **Permissions:** socket created with mode `0600`. If the path exists on
   startup and is not owned by the current UID, refuse to start.
@@ -1250,18 +1250,18 @@ resume preserves context across reattach; Codex does not.
 
 ## 8. Configuration
 
-Config file (optional): `~/.config/blemeesd/config.toml`. CLI flags and env
-vars override. Env prefix: `BLEMEESD_`.
+Config file (optional): `~/.config/blemees/agentd.toml`. CLI flags and env
+vars override. Env prefix: `BLEMEES_AGENTD_`.
 
 | Key | CLI flag | Env var | Default |
 |---|---|---|---|
-| `socket_path` | `--socket` | `BLEMEESD_SOCKET` | `$XDG_RUNTIME_DIR/blemeesd.sock` |
-| `claude_bin` | `--claude` | `BLEMEESD_CLAUDE` | `claude` on PATH |
-| `codex_bin` | `--codex` | `BLEMEESD_CODEX` | `codex` on PATH |
-| `log_level` | `--log-level` | `BLEMEESD_LOG_LEVEL` | `info` |
-| `log_file` | `--log-file` | `BLEMEESD_LOG_FILE` | stderr |
-| `max_line_bytes` | — | `BLEMEESD_MAX_LINE` | `16777216` |
-| `idle_timeout_s` | — | `BLEMEESD_IDLE_TIMEOUT` | `900` |
+| `socket_path` | `--socket` | `BLEMEES_AGENTD_SOCKET` | `$XDG_RUNTIME_DIR/blemees/agentd.sock` |
+| `claude_bin` | `--claude` | `BLEMEES_AGENTD_CLAUDE` | `claude` on PATH |
+| `codex_bin` | `--codex` | `BLEMEES_AGENTD_CODEX` | `codex` on PATH |
+| `log_level` | `--log-level` | `BLEMEES_AGENTD_LOG_LEVEL` | `info` |
+| `log_file` | `--log-file` | `BLEMEES_AGENTD_LOG_FILE` | stderr |
+| `max_line_bytes` | — | `BLEMEES_AGENTD_MAX_LINE` | `16777216` |
+| `idle_timeout_s` | — | `BLEMEES_AGENTD_IDLE_TIMEOUT` | `900` |
 | `session_retention_days` | — | — | `7` (0 disables) |
 | `max_sessions_per_connection` | — | — | `32` |
 | `max_concurrent_sessions` | — | — | `64` |
@@ -1275,14 +1275,14 @@ backends *are* available. Sessions for a missing backend fail with
 
 CLI:
 ```
-blemeesd [--socket PATH] [--claude PATH] [--codex PATH]
+blemees-agentd [--socket PATH] [--claude PATH] [--codex PATH]
         [--log-level LEVEL] [--log-file PATH]
         [--config FILE] [--version]
 ```
 
 v0.1 runs in the foreground only. Use systemd/launchd for background.
 
-### 8.1 systemd user unit (ship in `packaging/blemeesd/blemeesd.service`)
+### 8.1 systemd user unit (ship in `packaging/blemees-agentd/blemees-agentd.service`)
 
 ```ini
 [Unit]
@@ -1290,7 +1290,7 @@ Description=Headless agent daemon
 After=default.target
 
 [Service]
-ExecStart=%h/.local/bin/blemeesd
+ExecStart=%h/.local/bin/blemees-agentd
 Restart=on-failure
 RestartSec=2s
 
@@ -1298,13 +1298,13 @@ RestartSec=2s
 WantedBy=default.target
 ```
 
-### 8.2 launchd plist (ship in `packaging/blemeesd/com.blemees.blemeesd.plist`)
+### 8.2 launchd plist (ship in `packaging/blemees-agentd/com.blemees.blemees-agentd.plist`)
 
 Standard KeepAlive-on-crash plist with `ThrottleInterval=5`.
 
 ### 8.3 Service lifecycle
 
-`blemeesd` is a **per-user** daemon by design — one instance per UID,
+`blemees-agentd` is a **per-user** daemon by design — one instance per UID,
 one set of upstream agent accounts per instance (the `claude` and
 `codex` CLIs read state out of the user's home directory), socket
 pinned to that UID. Every install path above registers it with a
@@ -1313,27 +1313,27 @@ per-user service manager, not a system one.
 **macOS — LaunchAgent.** `brew services start blemees` writes
 `~/Library/LaunchAgents/homebrew.mxcl.blemees.plist` and loads it into your
 GUI session via `launchctl`. Manual install writes
-`~/Library/LaunchAgents/com.blemees.blemeesd.plist`. Either way it:
+`~/Library/LaunchAgents/com.blemees.blemees-agentd.plist`. Either way it:
 
 - starts at login, restarts on crash (`KeepAlive`),
 - stops at logout (a power cycle with no login leaves it off),
 - runs as you, so `~/.claude/` and `~/.codex/` creds and session
   logs are yours.
 
-Socket: `/tmp/blemeesd-<uid>.sock`.
+Socket: `/tmp/blemees-agentd-<uid>.sock`.
 Inspect: `brew services list`, `launchctl list | grep blemees`,
-`tail -f "$(brew --prefix)/var/log/blemees/blemeesd.err.log"`.
+`tail -f "$(brew --prefix)/var/log/blemees/blemees-agentd.err.log"`.
 
 **Linux — systemd `--user` unit.** `brew services start blemees` writes
 `~/.config/systemd/user/homebrew.blemees.service`. Manual install writes
-`~/.config/systemd/user/blemeesd.service`. Either way it:
+`~/.config/systemd/user/blemees-agentd.service`. Either way it:
 
 - starts when your user manager starts (first login after boot),
 - stops when your last session ends (SSH out, logout),
 - runs as you.
 
-Socket: `$XDG_RUNTIME_DIR/blemeesd.sock` (= `/run/user/<uid>/blemeesd.sock`).
-Inspect: `systemctl --user status blemeesd`, `journalctl --user -u blemeesd -f`.
+Socket: `$XDG_RUNTIME_DIR/blemees/agentd.sock` (= `/run/user/<uid>/blemees/agentd.sock`).
+Inspect: `systemctl --user status blemees-agentd`, `journalctl --user -u blemees-agentd -f`.
 
 #### Finding the `claude` and `codex` binaries
 
@@ -1346,25 +1346,25 @@ is wrong is a healthy `daemon.start` line but every session for the
 affected backend ending in `spawn_failed`.
 
 If your `claude` or `codex` lives elsewhere (npm global under
-`~/.nvm/...`, a custom path, etc.), override with `BLEMEESD_CLAUDE`
-and / or `BLEMEESD_CODEX`:
+`~/.nvm/...`, a custom path, etc.), override with `BLEMEES_AGENTD_CLAUDE`
+and / or `BLEMEES_AGENTD_CODEX`:
 
 - macOS:
   ```bash
-  launchctl setenv BLEMEESD_CLAUDE "$(which claude)"
-  launchctl setenv BLEMEESD_CODEX  "$(which codex)"
+  launchctl setenv BLEMEES_AGENTD_CLAUDE "$(which claude)"
+  launchctl setenv BLEMEES_AGENTD_CODEX  "$(which codex)"
   brew services restart blemees
   ```
   `launchctl setenv` persists until reboot; for durable override, add
   an `EnvironmentVariables` block to the plist.
 - Linux:
   ```bash
-  systemctl --user edit blemeesd
+  systemctl --user edit blemees-agentd
   # add in the editor:
   #   [Service]
-  #   Environment="BLEMEESD_CLAUDE=/full/path/to/claude"
-  #   Environment="BLEMEESD_CODEX=/full/path/to/codex"
-  systemctl --user restart blemeesd
+  #   Environment="BLEMEES_AGENTD_CLAUDE=/full/path/to/claude"
+  #   Environment="BLEMEES_AGENTD_CODEX=/full/path/to/codex"
+  systemctl --user restart blemees-agentd
   ```
 
 Or bake `--claude /full/path/to/claude --codex /full/path/to/codex`
@@ -1397,7 +1397,7 @@ drops to your user at launch:
 brew services stop blemees
 ```
 
-Write `/Library/LaunchDaemons/com.blemees.blemeesd.plist` (owned
+Write `/Library/LaunchDaemons/com.blemees.blemees-agentd.plist` (owned
 `root:wheel`, mode `0644`):
 
 ```xml
@@ -1406,11 +1406,11 @@ Write `/Library/LaunchDaemons/com.blemees.blemeesd.plist` (owned
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key>            <string>com.blemees.blemeesd</string>
+  <key>Label</key>            <string>com.blemees.blemees-agentd</string>
   <key>UserName</key>         <string>YOUR_USERNAME</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/opt/homebrew/bin/blemeesd</string>
+    <string>/opt/homebrew/bin/blemees-agentd</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -1419,8 +1419,8 @@ Write `/Library/LaunchDaemons/com.blemees.blemeesd.plist` (owned
   </dict>
   <key>RunAtLoad</key>        <true/>
   <key>KeepAlive</key>        <true/>
-  <key>StandardOutPath</key>  <string>/Users/YOUR_USERNAME/Library/Logs/blemees/blemeesd.out.log</string>
-  <key>StandardErrorPath</key><string>/Users/YOUR_USERNAME/Library/Logs/blemees/blemeesd.err.log</string>
+  <key>StandardOutPath</key>  <string>/Users/YOUR_USERNAME/Library/Logs/blemees/blemees-agentd.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/YOUR_USERNAME/Library/Logs/blemees/blemees-agentd.err.log</string>
 </dict>
 </plist>
 ```
@@ -1428,8 +1428,8 @@ Write `/Library/LaunchDaemons/com.blemees.blemeesd.plist` (owned
 Load and unload:
 
 ```bash
-sudo launchctl bootstrap system /Library/LaunchDaemons/com.blemees.blemeesd.plist
-sudo launchctl bootout   system /Library/LaunchDaemons/com.blemees.blemeesd.plist
+sudo launchctl bootstrap system /Library/LaunchDaemons/com.blemees.blemees-agentd.plist
+sudo launchctl bootout   system /Library/LaunchDaemons/com.blemees.blemees-agentd.plist
 ```
 
 Gotchas:
@@ -1506,7 +1506,7 @@ cleanly.
 Overall wall-clock budget is therefore `shutdown_grace_s + 5 s`. Past
 that, the daemon force-exits 1.
 
-Set `shutdown_grace_s=0` (via `BLEMEESD_SHUTDOWN_GRACE` env or config)
+Set `shutdown_grace_s=0` (via `BLEMEES_AGENTD_SHUTDOWN_GRACE` env or config)
 to disable the graceful phase and hard-kill immediately.
 
 ### 9.6 Stale socket file on startup
@@ -1608,12 +1608,12 @@ Acceptance targets on an ordinary dev machine:
   field is optional.
 - **`blemeesd.session_closed`** (§5.8, §5.14) — new outbound frame
   delivered to watchers when the owner closes a session.
-- **`blemees` console_script renamed to `blemeesctl`** (§0). The
+- **`blemees` console_script renamed to `blemees-agentctl`** (§0). The
   daemon wheel no longer ships a `blemees` command; that name now
   belongs to the chat TUI shipped by the
   [`blemees-tui`](https://github.com/blemees/blemees-tui) package.
   Users who typed `blemees` for the wire-protocol REPL should
-  retrain to `blemeesctl`. No deprecation alias — clean break, since
+  retrain to `blemees-agentctl`. No deprecation alias — clean break, since
   any alias would have collided with the TUI's claim on the name.
 
 ---

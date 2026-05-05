@@ -1,9 +1,9 @@
 ---
-title: blemeesd
+title: blemees-agentd
 nav_order: 1
 ---
 
-# blemeesd — Headless agent daemon
+# blemees-agentd — Headless agent daemon
 
 A per-user daemon that exposes the Claude Code CLI (`claude -p`) as a
 long-running, multi-session backend over a Unix domain socket. Clients
@@ -27,7 +27,7 @@ brew tap blemees/tap && brew install blemees
 Start the daemon (foreground; use systemd/launchd for service mode):
 
 ```bash
-blemeesd --log-level debug
+blemees-agentd --log-level debug
 ```
 
 Drive it with the reference client:

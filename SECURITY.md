@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-`blemeesd` is pre-1.0. Only the latest `0.x` release receives security
+`blemees-agentd` is pre-1.0. Only the latest `0.x` release receives security
 fixes; older `0.x` tags are not patched.
 
 | Version | Supported |
@@ -24,7 +24,7 @@ confirmed.
 
 ## Scope
 
-`blemeesd` is a **per-user** daemon by design: one instance per UID,
+`blemees-agentd` is a **per-user** daemon by design: one instance per UID,
 socket permissions `0600`, no peer-UID allowlist. Anyone who can
 `connect()` the socket has full access to the owning user's Claude
 subscription. This is intentional — see [the README](README.md#7-security)
