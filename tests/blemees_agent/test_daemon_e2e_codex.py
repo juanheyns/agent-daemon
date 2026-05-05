@@ -78,9 +78,9 @@ async def _client(socket_path: str):
 
     reader, writer = await asyncio.open_unix_connection(socket_path)
     c = _StreamClient(reader, writer)
-    await c.send({"type": "blemeesd.hello", "client": "e2e-codex/0", "protocol": PROTOCOL_VERSION})
+    await c.send({"type": "agent.hello", "client": "e2e-codex/0", "protocol": PROTOCOL_VERSION})
     ack = await c.recv()
-    assert ack["type"] == "blemeesd.hello_ack"
+    assert ack["type"] == "agent.hello_ack"
     return c
 
 
@@ -93,7 +93,7 @@ def _open_codex(session: str, *, cwd: str | None = None, **extra_options) -> dic
         options["cwd"] = cwd
     options.update(extra_options)
     return {
-        "type": "blemeesd.open",
+        "type": "agent.open",
         "id": "r1",
         "session_id": session,
         "backend": "codex",
@@ -124,7 +124,7 @@ async def test_real_codex_turn_produces_result(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -158,7 +158,7 @@ async def test_real_codex_context_across_two_turns(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -205,10 +205,10 @@ async def test_real_codex_session_info_in_memory_no_turns(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
-        await c.send({"type": "blemeesd.session_info", "id": "i1", "session_id": session})
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
+        await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
         info = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_info_reply", timeout=10.0
+            lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0
         )
         assert info["backend"] == "codex"
         assert info["session_id"] == session
@@ -231,11 +231,11 @@ async def test_real_codex_session_info_in_memory_after_turn(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(c, session)
-        await c.send({"type": "blemeesd.session_info", "id": "i1", "session_id": session})
+        await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
         info = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_info_reply", timeout=10.0
+            lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0
         )
         assert info["turns"] == 1
         assert info["attached"] is True
@@ -259,32 +259,32 @@ async def test_real_codex_session_info_after_close_uses_on_disk(real_daemon, tmp
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session, cwd=cwd))
-        opened = await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        opened = await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         # For codex, native_session_id only becomes meaningful after the
         # first turn — session_configured carries the real threadId.
         await _say_ok(c, session)
         # Re-resolve the threadId via session_info before closing — that's
         # what list_sessions and the on-disk lookup will key on.
-        await c.send({"type": "blemeesd.session_info", "id": "pre", "session_id": session})
+        await c.send({"type": "agent.session_info", "id": "pre", "session_id": session})
         pre = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_info_reply" and e.get("id") == "pre",
+            lambda e: e.get("type") == "agent.session_info_reply" and e.get("id") == "pre",
             timeout=10.0,
         )
         thread_id = pre["native_session_id"]
         assert isinstance(thread_id, str) and thread_id
 
-        await c.send({"type": "blemeesd.close", "id": "c1", "session_id": session, "delete": False})
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.closed", timeout=10.0)
+        await c.send({"type": "agent.close", "id": "c1", "session_id": session, "delete": False})
+        await c.wait_for(lambda e: e.get("type") == "agent.closed", timeout=10.0)
 
         # Query by the daemon's session_id (not the threadId): the
         # daemon's cache held the rollout path, so on-disk lookup
         # should still succeed via the threadId match.
-        await c.send({"type": "blemeesd.session_info", "id": "i1", "session_id": thread_id})
+        await c.send({"type": "agent.session_info", "id": "i1", "session_id": thread_id})
         evt = await c.wait_for(
-            lambda e: e.get("type") in {"blemeesd.session_info_reply", "blemeesd.error"},
+            lambda e: e.get("type") in {"agent.session_info_reply", "agent.error"},
             timeout=10.0,
         )
-        assert evt["type"] == "blemeesd.session_info_reply", (
+        assert evt["type"] == "agent.session_info_reply", (
             f"on-disk codex session info errored: {evt}"
         )
         assert evt["backend"] == "codex"
@@ -312,8 +312,8 @@ async def test_real_codex_session_info_after_close_uses_on_disk(real_daemon, tmp
 async def test_real_codex_session_info_unknown_session(real_daemon):
     c = await _client(real_daemon)
     try:
-        await c.send({"type": "blemeesd.session_info", "id": "i1", "session_id": "no-such-session"})
-        err = await c.wait_for(lambda e: e.get("type") == "blemeesd.error", timeout=10.0)
+        await c.send({"type": "agent.session_info", "id": "i1", "session_id": "no-such-session"})
+        err = await c.wait_for(lambda e: e.get("type") == "agent.error", timeout=10.0)
         assert err["code"] == "session_unknown"
     finally:
         await c.close()
@@ -332,11 +332,11 @@ async def test_real_codex_native_session_id_is_threadid(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(c, session)
-        await c.send({"type": "blemeesd.session_info", "id": "i1", "session_id": session})
+        await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
         info = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_info_reply", timeout=10.0
+            lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0
         )
         thread_id = info.get("native_session_id")
         assert isinstance(thread_id, str) and thread_id
@@ -354,20 +354,20 @@ async def test_real_codex_list_sessions_lifecycle(real_daemon, tmp_path):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session, cwd=cwd))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(c, session)
 
         # Resolve threadId — list_sessions keys codex rows by threadId.
-        await c.send({"type": "blemeesd.session_info", "id": "pre", "session_id": session})
+        await c.send({"type": "agent.session_info", "id": "pre", "session_id": session})
         pre = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_info_reply" and e.get("id") == "pre",
+            lambda e: e.get("type") == "agent.session_info_reply" and e.get("id") == "pre",
             timeout=10.0,
         )
         thread_id = pre["native_session_id"]
 
-        await c.send({"type": "blemeesd.list_sessions", "id": "l1", "cwd": cwd})
+        await c.send({"type": "agent.list_sessions", "id": "l1", "cwd": cwd})
         ls1 = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.sessions" and e.get("id") == "l1",
+            lambda e: e.get("type") == "agent.sessions" and e.get("id") == "l1",
             timeout=10.0,
         )
         # Some codex sessions are listed by threadId, some by daemon-id;
@@ -383,11 +383,11 @@ async def test_real_codex_list_sessions_lifecycle(real_daemon, tmp_path):
         assert ours_open is not None, f"open codex session missing: {ls1['sessions']}"
         assert ours_open["attached"] is True
 
-        await c.send({"type": "blemeesd.close", "id": "c1", "session_id": session, "delete": True})
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.closed", timeout=10.0)
-        await c.send({"type": "blemeesd.list_sessions", "id": "l2", "cwd": cwd})
+        await c.send({"type": "agent.close", "id": "c1", "session_id": session, "delete": True})
+        await c.wait_for(lambda e: e.get("type") == "agent.closed", timeout=10.0)
+        await c.send({"type": "agent.list_sessions", "id": "l2", "cwd": cwd})
         ls2 = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.sessions" and e.get("id") == "l2",
+            lambda e: e.get("type") == "agent.sessions" and e.get("id") == "l2",
             timeout=10.0,
         )
         assert all(r["session_id"] not in {session, thread_id} for r in ls2["sessions"]), (
@@ -410,12 +410,12 @@ async def test_real_codex_close_delete_preserves_rollout(real_daemon, tmp_path):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session, cwd=cwd))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(c, session)
         # Find the rollout path via session_info → on-disk lookup later.
-        await c.send({"type": "blemeesd.session_info", "id": "pre", "session_id": session})
+        await c.send({"type": "agent.session_info", "id": "pre", "session_id": session})
         pre = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_info_reply" and e.get("id") == "pre",
+            lambda e: e.get("type") == "agent.session_info_reply" and e.get("id") == "pre",
             timeout=10.0,
         )
         thread_id = pre["native_session_id"]
@@ -426,8 +426,8 @@ async def test_real_codex_close_delete_preserves_rollout(real_daemon, tmp_path):
         assert before is not None, f"rollout missing on disk for {thread_id!r}"
         rollout_path = before["rollout_path"]
 
-        await c.send({"type": "blemeesd.close", "id": "c1", "session_id": session, "delete": True})
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.closed", timeout=10.0)
+        await c.send({"type": "agent.close", "id": "c1", "session_id": session, "delete": True})
+        await c.wait_for(lambda e: e.get("type") == "agent.closed", timeout=10.0)
         from pathlib import Path as _P
 
         # Codex's rollout stays — only daemon-owned files are unlinked.
@@ -441,9 +441,9 @@ async def test_real_codex_interrupt_when_idle_is_no_op(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
-        await c.send({"type": "blemeesd.interrupt", "session_id": session})
-        ir = await c.wait_for(lambda e: e.get("type") == "blemeesd.interrupted", timeout=10.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
+        await c.send({"type": "agent.interrupt", "session_id": session})
+        ir = await c.wait_for(lambda e: e.get("type") == "agent.interrupted", timeout=10.0)
         assert ir["was_idle"] is True
         await _say_ok(c, session)
     finally:
@@ -455,7 +455,7 @@ async def test_real_codex_session_busy_on_concurrent_user_turn(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -475,7 +475,7 @@ async def test_real_codex_session_busy_on_concurrent_user_turn(real_daemon):
             }
         )
         err = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.error" and e.get("session_id") == session,
+            lambda e: e.get("type") == "agent.error" and e.get("session_id") == session,
             timeout=10.0,
         )
         assert err["code"] == "session_busy"
@@ -488,8 +488,8 @@ async def test_real_codex_session_busy_on_concurrent_user_turn(real_daemon):
 async def test_real_codex_status_reports_real_version(real_daemon):
     c = await _client(real_daemon)
     try:
-        await c.send({"type": "blemeesd.status", "id": "s1"})
-        st = await c.wait_for(lambda e: e.get("type") == "blemeesd.status_reply", timeout=10.0)
+        await c.send({"type": "agent.status", "id": "s1"})
+        st = await c.wait_for(lambda e: e.get("type") == "agent.status_reply", timeout=10.0)
         assert "codex" in st["backends"]
         version = st["backends"]["codex"]
         assert isinstance(version, str)
@@ -501,8 +501,8 @@ async def test_real_codex_status_reports_real_version(real_daemon):
 async def test_real_codex_ping_pong_echoes_data(real_daemon):
     c = await _client(real_daemon)
     try:
-        await c.send({"type": "blemeesd.ping", "id": "p1", "data": "anything"})
-        pong = await c.wait_for(lambda e: e.get("type") == "blemeesd.pong", timeout=5.0)
+        await c.send({"type": "agent.ping", "id": "p1", "data": "anything"})
+        pong = await c.wait_for(lambda e: e.get("type") == "agent.pong", timeout=5.0)
         assert pong["id"] == "p1"
         assert pong["data"] == "anything"
     finally:
@@ -521,7 +521,7 @@ async def test_real_codex_rejects_non_text_content_block(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         # 1×1 transparent PNG, base64-encoded.
         tiny_png = (
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8"
@@ -548,7 +548,7 @@ async def test_real_codex_rejects_non_text_content_block(real_daemon):
             }
         )
         err = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.error" and e.get("session_id") == session,
+            lambda e: e.get("type") == "agent.error" and e.get("session_id") == session,
             timeout=10.0,
         )
         assert err["code"] == "invalid_message"
@@ -561,10 +561,10 @@ async def test_real_codex_open_same_session_id_twice(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r2",
                 "session_id": session,
                 "backend": "codex",
@@ -573,11 +573,11 @@ async def test_real_codex_open_same_session_id_twice(real_daemon):
         )
         evt = await c.wait_for(
             lambda e: (
-                e.get("type") in {"blemeesd.opened", "blemeesd.error"} and e.get("id") == "r2"
+                e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r2"
             ),
             timeout=10.0,
         )
-        assert evt["type"] == "blemeesd.error"
+        assert evt["type"] == "agent.error"
         assert evt["code"] == "session_exists"
     finally:
         await c.close()
@@ -589,7 +589,7 @@ async def test_real_codex_array_text_content(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -615,11 +615,11 @@ async def test_real_codex_watch_observer_sees_owner_events(real_daemon):
     try:
         session = str(uuid.uuid4())
         await owner.send(_open_codex(session))
-        await owner.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await owner.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await watcher.send(
-            {"type": "blemeesd.watch", "id": "w1", "session_id": session, "last_seen_seq": 0}
+            {"type": "agent.watch", "id": "w1", "session_id": session, "last_seen_seq": 0}
         )
-        await watcher.wait_for(lambda e: e.get("type") == "blemeesd.watching", timeout=10.0)
+        await watcher.wait_for(lambda e: e.get("type") == "agent.watching", timeout=10.0)
         await owner.send(
             {
                 "type": "agent.user",
@@ -643,7 +643,7 @@ async def test_real_codex_interrupt_then_continue(real_daemon):
     underlying turn finishes naturally. We give it a generous budget
     and assert that:
 
-      1. `blemeesd.interrupted{was_idle:false}` lands quickly,
+      1. `agent.interrupted{was_idle:false}` lands quickly,
       2. an `agent.result` eventually arrives (subtype is whatever
          Codex produces — `interrupted` if our cancel-flag wins the
          race, or `success` if the model simply finishes first),
@@ -653,7 +653,7 @@ async def test_real_codex_interrupt_then_continue(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -665,8 +665,8 @@ async def test_real_codex_interrupt_then_continue(real_daemon):
             }
         )
         await c.wait_for(lambda e: e.get("type") == "agent.delta", timeout=120.0)
-        await c.send({"type": "blemeesd.interrupt", "session_id": session})
-        ir = await c.wait_for(lambda e: e.get("type") == "blemeesd.interrupted", timeout=15.0)
+        await c.send({"type": "agent.interrupt", "session_id": session})
+        ir = await c.wait_for(lambda e: e.get("type") == "agent.interrupted", timeout=15.0)
         assert ir["was_idle"] is False
         # Codex 0.125.x signals the cancellation via a `turn_aborted`
         # event; the translator finalises the in-flight turn from that
@@ -709,7 +709,7 @@ async def test_real_codex_open_unknown_option_rejected(real_daemon):
         session = str(uuid.uuid4())
         await c.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r1",
                 "session_id": session,
                 "backend": "codex",
@@ -723,7 +723,7 @@ async def test_real_codex_open_unknown_option_rejected(real_daemon):
             }
         )
         err = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.error" and e.get("id") == "r1",
+            lambda e: e.get("type") == "agent.error" and e.get("id") == "r1",
             timeout=10.0,
         )
         assert err["code"] == "invalid_message"
@@ -739,7 +739,7 @@ async def test_real_codex_open_with_empty_options(real_daemon):
         session = str(uuid.uuid4())
         await c.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r1",
                 "session_id": session,
                 "backend": "codex",
@@ -748,11 +748,11 @@ async def test_real_codex_open_with_empty_options(real_daemon):
         )
         evt = await c.wait_for(
             lambda e: (
-                e.get("type") in {"blemeesd.opened", "blemeesd.error"} and e.get("id") == "r1"
+                e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r1"
             ),
             timeout=30.0,
         )
-        assert evt["type"] == "blemeesd.opened" or evt["code"] != "invalid_message", evt
+        assert evt["type"] == "agent.opened" or evt["code"] != "invalid_message", evt
     finally:
         await c.close()
 
@@ -772,7 +772,7 @@ async def test_real_codex_agent_user_unknown_session(real_daemon):
                 "message": {"role": "user", "content": "hi"},
             }
         )
-        err = await c.wait_for(lambda e: e.get("type") == "blemeesd.error", timeout=10.0)
+        err = await c.wait_for(lambda e: e.get("type") == "agent.error", timeout=10.0)
         assert err["code"] == "session_unknown"
     finally:
         await c.close()
@@ -783,7 +783,7 @@ async def test_real_codex_agent_user_role_must_be_user(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -791,7 +791,7 @@ async def test_real_codex_agent_user_role_must_be_user(real_daemon):
                 "message": {"role": "assistant", "content": "I'm an assistant."},
             }
         )
-        err = await c.wait_for(lambda e: e.get("type") == "blemeesd.error", timeout=10.0)
+        err = await c.wait_for(lambda e: e.get("type") == "agent.error", timeout=10.0)
         assert err["code"] == "invalid_message"
     finally:
         await c.close()
@@ -807,14 +807,14 @@ async def test_real_codex_close_unknown_session_is_idempotent(real_daemon):
     try:
         await c.send(
             {
-                "type": "blemeesd.close",
+                "type": "agent.close",
                 "id": "c1",
                 "session_id": "no-such-session",
                 "delete": False,
             }
         )
         ack = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.closed" and e.get("id") == "c1",
+            lambda e: e.get("type") == "agent.closed" and e.get("id") == "c1",
             timeout=10.0,
         )
         assert ack["session_id"] == "no-such-session"
@@ -827,15 +827,15 @@ async def test_real_codex_double_close_is_idempotent(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
-        await c.send({"type": "blemeesd.close", "id": "c1", "session_id": session, "delete": True})
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
+        await c.send({"type": "agent.close", "id": "c1", "session_id": session, "delete": True})
         await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.closed" and e.get("id") == "c1",
+            lambda e: e.get("type") == "agent.closed" and e.get("id") == "c1",
             timeout=10.0,
         )
-        await c.send({"type": "blemeesd.close", "id": "c2", "session_id": session, "delete": False})
+        await c.send({"type": "agent.close", "id": "c2", "session_id": session, "delete": False})
         ack2 = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.closed" and e.get("id") == "c2",
+            lambda e: e.get("type") == "agent.closed" and e.get("id") == "c2",
             timeout=10.0,
         )
         assert ack2["session_id"] == session
@@ -853,12 +853,12 @@ async def test_real_codex_three_turns_accumulate_usage(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         for _ in range(3):
             await _say_ok(c, session)
-        await c.send({"type": "blemeesd.session_info", "id": "i1", "session_id": session})
+        await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
         info = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_info_reply", timeout=10.0
+            lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0
         )
         assert info["turns"] == 3
         cu = info["cumulative_usage"]
@@ -877,7 +877,7 @@ async def test_real_codex_two_concurrent_sessions_independent(real_daemon):
             await c.send(_open_codex(sid))
             await c.wait_for(
                 lambda e, sid=sid: (
-                    e.get("type") == "blemeesd.opened" and e.get("session_id") == sid
+                    e.get("type") == "agent.opened" and e.get("session_id") == sid
                 ),
                 timeout=30.0,
             )
@@ -911,7 +911,7 @@ async def test_real_codex_status_active_turns_during_turn(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -923,9 +923,9 @@ async def test_real_codex_status_active_turns_during_turn(real_daemon):
             }
         )
         await c.wait_for(lambda e: e.get("type") == "agent.delta", timeout=120.0)
-        await c.send({"type": "blemeesd.status", "id": "s1"})
+        await c.send({"type": "agent.status", "id": "s1"})
         st = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.status_reply" and e.get("id") == "s1",
+            lambda e: e.get("type") == "agent.status_reply" and e.get("id") == "s1",
             timeout=10.0,
         )
         assert st["sessions"]["active_turns"] >= 1
@@ -934,8 +934,8 @@ async def test_real_codex_status_active_turns_during_turn(real_daemon):
         # ordering is locked down by mock tests; here we don't drain
         # the codex side because 0.125.x can stream events for a
         # cancelled turn for a long time before settling.
-        await c.send({"type": "blemeesd.interrupt", "session_id": session})
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.interrupted", timeout=15.0)
+        await c.send({"type": "agent.interrupt", "session_id": session})
+        await c.wait_for(lambda e: e.get("type") == "agent.interrupted", timeout=15.0)
     finally:
         await c.close()
 
@@ -950,10 +950,10 @@ async def test_real_codex_unwatch_when_not_watching(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
-        await c.send({"type": "blemeesd.unwatch", "id": "uw1", "session_id": session})
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
+        await c.send({"type": "agent.unwatch", "id": "uw1", "session_id": session})
         ack = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.unwatched" and e.get("id") == "uw1",
+            lambda e: e.get("type") == "agent.unwatched" and e.get("id") == "uw1",
             timeout=10.0,
         )
         assert ack["was_watching"] is False
@@ -964,8 +964,8 @@ async def test_real_codex_unwatch_when_not_watching(real_daemon):
 async def test_real_codex_watch_unknown_session_errors(real_daemon):
     c = await _client(real_daemon)
     try:
-        await c.send({"type": "blemeesd.watch", "id": "w1", "session_id": "no-such-session"})
-        err = await c.wait_for(lambda e: e.get("type") == "blemeesd.error", timeout=10.0)
+        await c.send({"type": "agent.watch", "id": "w1", "session_id": "no-such-session"})
+        err = await c.wait_for(lambda e: e.get("type") == "agent.error", timeout=10.0)
         assert err["code"] == "session_unknown"
     finally:
         await c.close()
@@ -980,9 +980,9 @@ async def test_real_codex_list_sessions_empty_cwd(real_daemon, tmp_path):
     c = await _client(real_daemon)
     try:
         empty_cwd = str((tmp_path / "no-codex-sessions-here").resolve())
-        await c.send({"type": "blemeesd.list_sessions", "id": "l1", "cwd": empty_cwd})
+        await c.send({"type": "agent.list_sessions", "id": "l1", "cwd": empty_cwd})
         ls = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.sessions" and e.get("id") == "l1",
+            lambda e: e.get("type") == "agent.sessions" and e.get("id") == "l1",
             timeout=10.0,
         )
         # Pure on-disk listings are empty for a fresh cwd; if the
@@ -1003,7 +1003,7 @@ async def test_real_codex_list_sessions_includes_first_user_preview(real_daemon,
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session, cwd=cwd))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -1017,16 +1017,16 @@ async def test_real_codex_list_sessions_includes_first_user_preview(real_daemon,
         await _drain_turn(c, session)
 
         # Resolve threadId so we can find the row.
-        await c.send({"type": "blemeesd.session_info", "id": "pre", "session_id": session})
+        await c.send({"type": "agent.session_info", "id": "pre", "session_id": session})
         pre = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_info_reply" and e.get("id") == "pre",
+            lambda e: e.get("type") == "agent.session_info_reply" and e.get("id") == "pre",
             timeout=10.0,
         )
         thread_id = pre["native_session_id"]
 
-        await c.send({"type": "blemeesd.list_sessions", "id": "l1", "cwd": cwd})
+        await c.send({"type": "agent.list_sessions", "id": "l1", "cwd": cwd})
         ls = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.sessions" and e.get("id") == "l1",
+            lambda e: e.get("type") == "agent.sessions" and e.get("id") == "l1",
             timeout=10.0,
         )
         ours = next(
@@ -1061,7 +1061,7 @@ async def test_real_codex_reconnect_resume_replays_seen_events(real_daemon):
     session = str(uuid.uuid4())
     try:
         await c.send(_open_codex(session))
-        opened = await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        opened = await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(c, session)
         last_seq = opened.get("last_seq", 0)
     finally:
@@ -1071,7 +1071,7 @@ async def test_real_codex_reconnect_resume_replays_seen_events(real_daemon):
     try:
         await c2.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r2",
                 "session_id": session,
                 "backend": "codex",
@@ -1081,7 +1081,7 @@ async def test_real_codex_reconnect_resume_replays_seen_events(real_daemon):
             }
         )
         opened2 = await c2.wait_for(
-            lambda e: e.get("type") == "blemeesd.opened" and e.get("id") == "r2",
+            lambda e: e.get("type") == "agent.opened" and e.get("id") == "r2",
             timeout=30.0,
         )
         assert opened2["last_seq"] >= last_seq
@@ -1100,7 +1100,7 @@ async def test_real_codex_double_interrupt_second_is_idle(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -1112,7 +1112,7 @@ async def test_real_codex_double_interrupt_second_is_idle(real_daemon):
             }
         )
         await c.wait_for(lambda e: e.get("type") == "agent.delta", timeout=120.0)
-        await c.send({"type": "blemeesd.interrupt", "session_id": session})
+        await c.send({"type": "agent.interrupt", "session_id": session})
         # Drain whatever lands first (either was_idle:false or the
         # synthesized agent.result(interrupted)).
         post = await c.wait_for(
@@ -1120,11 +1120,11 @@ async def test_real_codex_double_interrupt_second_is_idle(real_daemon):
             collect=True,
             timeout=300.0,
         )
-        ir = next((e for e in post if e.get("type") == "blemeesd.interrupted"), None)
+        ir = next((e for e in post if e.get("type") == "agent.interrupted"), None)
         assert ir is not None and ir["was_idle"] is False, post
         # Second interrupt — turn already finalised.
-        await c.send({"type": "blemeesd.interrupt", "session_id": session})
-        ir2 = await c.wait_for(lambda e: e.get("type") == "blemeesd.interrupted", timeout=10.0)
+        await c.send({"type": "agent.interrupt", "session_id": session})
+        ir2 = await c.wait_for(lambda e: e.get("type") == "agent.interrupted", timeout=10.0)
         assert ir2["was_idle"] is True
     finally:
         await c.close()
@@ -1136,12 +1136,12 @@ async def test_real_codex_session_takeover_notifies_old_owner(real_daemon):
     try:
         session = str(uuid.uuid4())
         await owner.send(_open_codex(session))
-        await owner.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await owner.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(owner, session)
 
         await other.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "takeover",
                 "session_id": session,
                 "backend": "codex",
@@ -1150,12 +1150,12 @@ async def test_real_codex_session_takeover_notifies_old_owner(real_daemon):
             }
         )
         evt = await owner.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_taken" and e.get("session_id") == session,
+            lambda e: e.get("type") == "agent.session_taken" and e.get("session_id") == session,
             timeout=15.0,
         )
         assert evt["session_id"] == session
         await other.wait_for(
-            lambda e: e.get("type") == "blemeesd.opened" and e.get("id") == "takeover",
+            lambda e: e.get("type") == "agent.opened" and e.get("id") == "takeover",
             timeout=15.0,
         )
     finally:
@@ -1174,8 +1174,8 @@ async def test_real_codex_hello_with_no_client_field(real_daemon):
         from tests.blemees_agent.conftest import _StreamClient
 
         c = _StreamClient(reader, writer)
-        await c.send({"type": "blemeesd.hello", "protocol": PROTOCOL_VERSION})
-        ack = await c.wait_for(lambda e: e.get("type") == "blemeesd.hello_ack", timeout=10.0)
+        await c.send({"type": "agent.hello", "protocol": PROTOCOL_VERSION})
+        ack = await c.wait_for(lambda e: e.get("type") == "agent.hello_ack", timeout=10.0)
         assert ack["protocol"] == PROTOCOL_VERSION
         await c.close()
     finally:
@@ -1196,9 +1196,9 @@ async def test_real_codex_agent_user_missing_message(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send({"type": "agent.user", "session_id": session})
-        err = await c.wait_for(lambda e: e.get("type") == "blemeesd.error", timeout=10.0)
+        err = await c.wait_for(lambda e: e.get("type") == "agent.error", timeout=10.0)
         assert err["code"] == "invalid_message"
     finally:
         await c.close()
@@ -1209,7 +1209,7 @@ async def test_real_codex_agent_user_content_null(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -1217,7 +1217,7 @@ async def test_real_codex_agent_user_content_null(real_daemon):
                 "message": {"role": "user", "content": None},
             }
         )
-        err = await c.wait_for(lambda e: e.get("type") == "blemeesd.error", timeout=10.0)
+        err = await c.wait_for(lambda e: e.get("type") == "agent.error", timeout=10.0)
         assert err["code"] == "invalid_message"
     finally:
         await c.close()
@@ -1228,7 +1228,7 @@ async def test_real_codex_agent_user_unicode_emoji_passthrough(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -1254,7 +1254,7 @@ async def test_real_codex_back_to_back_turns(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(c, session)
         await _say_ok(c, session)
     finally:
@@ -1271,7 +1271,7 @@ async def test_real_codex_session_info_during_inflight_turn(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -1283,16 +1283,16 @@ async def test_real_codex_session_info_during_inflight_turn(real_daemon):
             }
         )
         await c.wait_for(lambda e: e.get("type") == "agent.delta", timeout=120.0)
-        await c.send({"type": "blemeesd.session_info", "id": "i1", "session_id": session})
+        await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
         info = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_info_reply" and e.get("id") == "i1",
+            lambda e: e.get("type") == "agent.session_info_reply" and e.get("id") == "i1",
             timeout=10.0,
         )
         assert info["attached"] is True
         assert info["subprocess_running"] is True
         # Cleanup.
-        await c.send({"type": "blemeesd.interrupt", "session_id": session})
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.interrupted", timeout=15.0)
+        await c.send({"type": "agent.interrupt", "session_id": session})
+        await c.wait_for(lambda e: e.get("type") == "agent.interrupted", timeout=15.0)
     finally:
         await c.close()
 
@@ -1305,8 +1305,8 @@ async def test_real_codex_session_info_during_inflight_turn(real_daemon):
 async def test_real_codex_status_with_no_sessions(real_daemon):
     c = await _client(real_daemon)
     try:
-        await c.send({"type": "blemeesd.status", "id": "s1"})
-        st = await c.wait_for(lambda e: e.get("type") == "blemeesd.status_reply", timeout=10.0)
+        await c.send({"type": "agent.status", "id": "s1"})
+        st = await c.wait_for(lambda e: e.get("type") == "agent.status_reply", timeout=10.0)
         s = st["sessions"]
         assert s["total"] == 0
         assert s["active_turns"] == 0
@@ -1318,15 +1318,15 @@ async def test_real_codex_status_with_no_sessions(real_daemon):
 async def test_real_codex_status_uptime_monotonic(real_daemon):
     c = await _client(real_daemon)
     try:
-        await c.send({"type": "blemeesd.status", "id": "s1"})
+        await c.send({"type": "agent.status", "id": "s1"})
         st1 = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.status_reply" and e.get("id") == "s1",
+            lambda e: e.get("type") == "agent.status_reply" and e.get("id") == "s1",
             timeout=10.0,
         )
         await asyncio.sleep(0.5)
-        await c.send({"type": "blemeesd.status", "id": "s2"})
+        await c.send({"type": "agent.status", "id": "s2"})
         st2 = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.status_reply" and e.get("id") == "s2",
+            lambda e: e.get("type") == "agent.status_reply" and e.get("id") == "s2",
             timeout=10.0,
         )
         assert st2["uptime_s"] > st1["uptime_s"]
@@ -1345,11 +1345,11 @@ async def test_real_codex_watcher_disconnect_auto_unwatch(real_daemon):
     try:
         session = str(uuid.uuid4())
         await owner.send(_open_codex(session))
-        await owner.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await owner.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await watcher.send(
-            {"type": "blemeesd.watch", "id": "w1", "session_id": session, "last_seen_seq": 0}
+            {"type": "agent.watch", "id": "w1", "session_id": session, "last_seen_seq": 0}
         )
-        await watcher.wait_for(lambda e: e.get("type") == "blemeesd.watching", timeout=10.0)
+        await watcher.wait_for(lambda e: e.get("type") == "agent.watching", timeout=10.0)
         await _say_ok(owner, session)
         await watcher.close()
         await _say_ok(owner, session)
@@ -1362,20 +1362,20 @@ async def test_real_codex_watcher_replay_via_last_seen_seq(real_daemon):
     try:
         session = str(uuid.uuid4())
         await owner.send(_open_codex(session))
-        await owner.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await owner.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(owner, session)
         watcher = await _client(real_daemon)
         try:
             await watcher.send(
                 {
-                    "type": "blemeesd.watch",
+                    "type": "agent.watch",
                     "id": "w1",
                     "session_id": session,
                     "last_seen_seq": 0,
                 }
             )
             ack = await watcher.wait_for(
-                lambda e: e.get("type") == "blemeesd.watching" and e.get("id") == "w1",
+                lambda e: e.get("type") == "agent.watching" and e.get("id") == "w1",
                 timeout=10.0,
             )
             assert ack["last_seq"] >= 1
@@ -1404,7 +1404,7 @@ async def test_real_codex_developer_instructions_passthrough(real_daemon):
         # Pin the response to a single token so we can assert on it.
         await c.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r1",
                 "session_id": session,
                 "backend": "codex",
@@ -1420,7 +1420,7 @@ async def test_real_codex_developer_instructions_passthrough(real_daemon):
                 },
             }
         )
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -1464,11 +1464,11 @@ async def test_real_codex_watcher_sees_synthesized_interrupt_result(real_daemon)
     try:
         session = str(uuid.uuid4())
         await owner.send(_open_codex(session))
-        await owner.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await owner.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await watcher.send(
-            {"type": "blemeesd.watch", "id": "w1", "session_id": session, "last_seen_seq": 0}
+            {"type": "agent.watch", "id": "w1", "session_id": session, "last_seen_seq": 0}
         )
-        await watcher.wait_for(lambda e: e.get("type") == "blemeesd.watching", timeout=10.0)
+        await watcher.wait_for(lambda e: e.get("type") == "agent.watching", timeout=10.0)
         await owner.send(
             {
                 "type": "agent.user",
@@ -1480,8 +1480,8 @@ async def test_real_codex_watcher_sees_synthesized_interrupt_result(real_daemon)
             }
         )
         await owner.wait_for(lambda e: e.get("type") == "agent.delta", timeout=120.0)
-        await owner.send({"type": "blemeesd.interrupt", "session_id": session})
-        await owner.wait_for(lambda e: e.get("type") == "blemeesd.interrupted", timeout=15.0)
+        await owner.send({"type": "agent.interrupt", "session_id": session})
+        await owner.wait_for(lambda e: e.get("type") == "agent.interrupted", timeout=15.0)
         synthesized = await watcher.wait_for(
             lambda e: e.get("type") == "agent.result" and e.get("session_id") == session,
             timeout=120.0,
@@ -1503,19 +1503,19 @@ async def test_real_codex_double_watch_is_idempotent(real_daemon):
     try:
         session = str(uuid.uuid4())
         await owner.send(_open_codex(session))
-        await owner.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await owner.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await watcher.send(
-            {"type": "blemeesd.watch", "id": "w1", "session_id": session, "last_seen_seq": 0}
+            {"type": "agent.watch", "id": "w1", "session_id": session, "last_seen_seq": 0}
         )
         ack1 = await watcher.wait_for(
-            lambda e: e.get("type") == "blemeesd.watching" and e.get("id") == "w1",
+            lambda e: e.get("type") == "agent.watching" and e.get("id") == "w1",
             timeout=10.0,
         )
         await watcher.send(
-            {"type": "blemeesd.watch", "id": "w2", "session_id": session, "last_seen_seq": 0}
+            {"type": "agent.watch", "id": "w2", "session_id": session, "last_seen_seq": 0}
         )
         ack2 = await watcher.wait_for(
-            lambda e: e.get("type") == "blemeesd.watching" and e.get("id") == "w2",
+            lambda e: e.get("type") == "agent.watching" and e.get("id") == "w2",
             timeout=10.0,
         )
         assert ack2["last_seq"] >= ack1["last_seq"]
@@ -1527,23 +1527,23 @@ async def test_real_codex_double_watch_is_idempotent(real_daemon):
 async def test_real_codex_status_total_after_close(real_daemon):
     c = await _client(real_daemon)
     try:
-        await c.send({"type": "blemeesd.status", "id": "s0"})
+        await c.send({"type": "agent.status", "id": "s0"})
         st0 = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.status_reply" and e.get("id") == "s0",
+            lambda e: e.get("type") == "agent.status_reply" and e.get("id") == "s0",
             timeout=10.0,
         )
         baseline = st0["sessions"]["total"]
 
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(c, session)
-        await c.send({"type": "blemeesd.close", "id": "c1", "session_id": session, "delete": True})
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.closed", timeout=10.0)
+        await c.send({"type": "agent.close", "id": "c1", "session_id": session, "delete": True})
+        await c.wait_for(lambda e: e.get("type") == "agent.closed", timeout=10.0)
 
-        await c.send({"type": "blemeesd.status", "id": "s1"})
+        await c.send({"type": "agent.status", "id": "s1"})
         st1 = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.status_reply" and e.get("id") == "s1",
+            lambda e: e.get("type") == "agent.status_reply" and e.get("id") == "s1",
             timeout=10.0,
         )
         assert st1["sessions"]["total"] == baseline
@@ -1555,8 +1555,8 @@ async def test_real_codex_session_info_on_random_uuid_unknown(real_daemon):
     c = await _client(real_daemon)
     try:
         random_id = str(uuid.uuid4())
-        await c.send({"type": "blemeesd.session_info", "id": "i1", "session_id": random_id})
-        err = await c.wait_for(lambda e: e.get("type") == "blemeesd.error", timeout=10.0)
+        await c.send({"type": "agent.session_info", "id": "i1", "session_id": random_id})
+        err = await c.wait_for(lambda e: e.get("type") == "agent.error", timeout=10.0)
         assert err["code"] == "session_unknown"
     finally:
         await c.close()
@@ -1571,7 +1571,7 @@ async def test_real_codex_soft_detach_idle_session_reattaches(real_daemon):
     c1 = await _client(real_daemon)
     session = str(uuid.uuid4())
     await c1.send(_open_codex(session))
-    await c1.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+    await c1.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
     await _say_ok(c1, session)
     await c1.close()
 
@@ -1579,7 +1579,7 @@ async def test_real_codex_soft_detach_idle_session_reattaches(real_daemon):
     try:
         await c2.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r2",
                 "session_id": session,
                 "backend": "codex",
@@ -1588,7 +1588,7 @@ async def test_real_codex_soft_detach_idle_session_reattaches(real_daemon):
             }
         )
         await c2.wait_for(
-            lambda e: e.get("type") == "blemeesd.opened" and e.get("id") == "r2",
+            lambda e: e.get("type") == "agent.opened" and e.get("id") == "r2",
             timeout=30.0,
         )
         # Run a fresh turn to verify the reattached session works. Codex
@@ -1603,8 +1603,8 @@ async def test_real_codex_soft_detach_idle_session_reattaches(real_daemon):
 async def test_real_codex_ping_without_data_or_id(real_daemon):
     c = await _client(real_daemon)
     try:
-        await c.send({"type": "blemeesd.ping"})
-        pong = await c.wait_for(lambda e: e.get("type") == "blemeesd.pong", timeout=5.0)
+        await c.send({"type": "agent.ping"})
+        pong = await c.wait_for(lambda e: e.get("type") == "agent.pong", timeout=5.0)
         assert "id" not in pong
         assert "data" not in pong
     finally:
@@ -1616,14 +1616,14 @@ async def test_real_codex_open_with_no_options_field_rejected(real_daemon):
     try:
         await c.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r1",
                 "session_id": str(uuid.uuid4()),
                 "backend": "codex",
             }
         )
         err = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.error" and e.get("id") == "r1",
+            lambda e: e.get("type") == "agent.error" and e.get("id") == "r1",
             timeout=10.0,
         )
         assert err["code"] == "invalid_message"
@@ -1637,7 +1637,7 @@ async def test_real_codex_list_sessions_during_inflight(real_daemon, tmp_path):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session, cwd=cwd))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send(
             {
                 "type": "agent.user",
@@ -1646,15 +1646,15 @@ async def test_real_codex_list_sessions_during_inflight(real_daemon, tmp_path):
             }
         )
         await c.wait_for(lambda e: e.get("type") == "agent.delta", timeout=120.0)
-        await c.send({"type": "blemeesd.list_sessions", "id": "l1", "cwd": cwd})
+        await c.send({"type": "agent.list_sessions", "id": "l1", "cwd": cwd})
         ls = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.sessions" and e.get("id") == "l1",
+            lambda e: e.get("type") == "agent.sessions" and e.get("id") == "l1",
             timeout=10.0,
         )
         # Resolve threadId.
-        await c.send({"type": "blemeesd.session_info", "id": "i1", "session_id": session})
+        await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
         info = await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_info_reply" and e.get("id") == "i1",
+            lambda e: e.get("type") == "agent.session_info_reply" and e.get("id") == "i1",
             timeout=10.0,
         )
         thread_id = info["native_session_id"]
@@ -1662,8 +1662,8 @@ async def test_real_codex_list_sessions_during_inflight(real_daemon, tmp_path):
         assert ours is not None
         assert ours["attached"] is True
         # Cleanup.
-        await c.send({"type": "blemeesd.interrupt", "session_id": session})
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.interrupted", timeout=15.0)
+        await c.send({"type": "agent.interrupt", "session_id": session})
+        await c.wait_for(lambda e: e.get("type") == "agent.interrupted", timeout=15.0)
     finally:
         await c.close()
 
@@ -1676,7 +1676,7 @@ async def test_real_codex_three_connections_three_sessions(real_daemon):
             await c.send(_open_codex(sid))
             await c.wait_for(
                 lambda e, sid=sid: (
-                    e.get("type") == "blemeesd.opened" and e.get("session_id") == sid
+                    e.get("type") == "agent.opened" and e.get("session_id") == sid
                 ),
                 timeout=30.0,
             )
@@ -1690,9 +1690,9 @@ async def test_real_codex_three_connections_three_sessions(real_daemon):
             )
         for c, sid in zip(clients, sessions, strict=True):
             await _drain_turn(c, sid, timeout=300.0)
-        await clients[0].send({"type": "blemeesd.status", "id": "s1"})
+        await clients[0].send({"type": "agent.status", "id": "s1"})
         st = await clients[0].wait_for(
-            lambda e: e.get("type") == "blemeesd.status_reply" and e.get("id") == "s1",
+            lambda e: e.get("type") == "agent.status_reply" and e.get("id") == "s1",
             timeout=10.0,
         )
         assert st["sessions"]["total"] >= 3
@@ -1712,7 +1712,7 @@ async def test_real_codex_agent_user_long_content(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         body = "abcde " * 1000
         await c.send(
             {
@@ -1736,12 +1736,12 @@ async def test_real_codex_third_connection_sees_session_taken_chain(real_daemon)
     try:
         session = str(uuid.uuid4())
         await a.send(_open_codex(session))
-        await a.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await a.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(a, session)
 
         await b.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "b1",
                 "session_id": session,
                 "backend": "codex",
@@ -1750,17 +1750,17 @@ async def test_real_codex_third_connection_sees_session_taken_chain(real_daemon)
             }
         )
         await a.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_taken" and e.get("session_id") == session,
+            lambda e: e.get("type") == "agent.session_taken" and e.get("session_id") == session,
             timeout=15.0,
         )
         await b.wait_for(
-            lambda e: e.get("type") == "blemeesd.opened" and e.get("id") == "b1",
+            lambda e: e.get("type") == "agent.opened" and e.get("id") == "b1",
             timeout=15.0,
         )
 
         await c.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "c1",
                 "session_id": session,
                 "backend": "codex",
@@ -1769,11 +1769,11 @@ async def test_real_codex_third_connection_sees_session_taken_chain(real_daemon)
             }
         )
         await b.wait_for(
-            lambda e: e.get("type") == "blemeesd.session_taken" and e.get("session_id") == session,
+            lambda e: e.get("type") == "agent.session_taken" and e.get("session_id") == session,
             timeout=15.0,
         )
         await c.wait_for(
-            lambda e: e.get("type") == "blemeesd.opened" and e.get("id") == "c1",
+            lambda e: e.get("type") == "agent.opened" and e.get("id") == "c1",
             timeout=15.0,
         )
     finally:
@@ -1789,15 +1789,15 @@ async def test_real_codex_session_taken_doesnt_kick_watcher(real_daemon):
     try:
         session = str(uuid.uuid4())
         await owner1.send(_open_codex(session))
-        await owner1.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await owner1.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(owner1, session)
         await watcher.send(
-            {"type": "blemeesd.watch", "id": "w1", "session_id": session, "last_seen_seq": 0}
+            {"type": "agent.watch", "id": "w1", "session_id": session, "last_seen_seq": 0}
         )
-        await watcher.wait_for(lambda e: e.get("type") == "blemeesd.watching", timeout=10.0)
+        await watcher.wait_for(lambda e: e.get("type") == "agent.watching", timeout=10.0)
         await owner2.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r2",
                 "session_id": session,
                 "backend": "codex",
@@ -1805,9 +1805,9 @@ async def test_real_codex_session_taken_doesnt_kick_watcher(real_daemon):
                 "options": {"codex": {"sandbox": "read-only", "approval-policy": "never"}},
             }
         )
-        await owner1.wait_for(lambda e: e.get("type") == "blemeesd.session_taken", timeout=15.0)
+        await owner1.wait_for(lambda e: e.get("type") == "agent.session_taken", timeout=15.0)
         await owner2.wait_for(
-            lambda e: e.get("type") == "blemeesd.opened" and e.get("id") == "r2",
+            lambda e: e.get("type") == "agent.opened" and e.get("id") == "r2",
             timeout=15.0,
         )
         await owner2.send(
@@ -1840,7 +1840,7 @@ async def test_real_codex_close_connection_mid_turn_session_survives(real_daemon
     c1 = await _client(real_daemon)
     session = str(uuid.uuid4())
     await c1.send(_open_codex(session))
-    await c1.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+    await c1.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
     await c1.send(
         {
             "type": "agent.user",
@@ -1856,7 +1856,7 @@ async def test_real_codex_close_connection_mid_turn_session_survives(real_daemon
     try:
         await c2.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r2",
                 "session_id": session,
                 "backend": "codex",
@@ -1865,7 +1865,7 @@ async def test_real_codex_close_connection_mid_turn_session_survives(real_daemon
             }
         )
         opened = await c2.wait_for(
-            lambda e: e.get("type") == "blemeesd.opened" and e.get("id") == "r2",
+            lambda e: e.get("type") == "agent.opened" and e.get("id") == "r2",
             timeout=30.0,
         )
         assert opened["session_id"] == session
@@ -1880,16 +1880,16 @@ async def test_real_codex_status_attached_detached_counts(real_daemon):
     s_b = str(uuid.uuid4())
     try:
         await c_a.send(_open_codex(s_a))
-        await c_a.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c_a.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c_b.send(_open_codex(s_b))
-        await c_b.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c_b.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(c_a, s_a)
         await _say_ok(c_b, s_b)
         await c_b.close()
         await asyncio.sleep(0.5)
-        await c_a.send({"type": "blemeesd.status", "id": "s1"})
+        await c_a.send({"type": "agent.status", "id": "s1"})
         st = await c_a.wait_for(
-            lambda e: e.get("type") == "blemeesd.status_reply" and e.get("id") == "s1",
+            lambda e: e.get("type") == "agent.status_reply" and e.get("id") == "s1",
             timeout=10.0,
         )
         assert st["sessions"]["attached"] >= 1
@@ -1909,7 +1909,7 @@ async def test_real_codex_user_echo_emitted(real_daemon):
     try:
         session = str(uuid.uuid4())
         await c.send(_open_codex(session))
-        await c.wait_for(lambda e: e.get("type") == "blemeesd.opened", timeout=30.0)
+        await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         marker = "codex-user-echo-marker-9876"
         await c.send(
             {

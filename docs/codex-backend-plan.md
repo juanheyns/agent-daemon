@@ -20,14 +20,14 @@ mcp-server` traces that grounded it live under [`docs/traces/`](traces/).
 | 5 | Hardening | ✅ done |
 | 6 | Cleanup | ✅ done |
 
-The daemon advertises `blemees/2`, emits `agent.*` end-to-end on both
+The daemon advertises `blemees-agent/1`, emits `agent.*` end-to-end on both
 backends, and supports the full open / user / interrupt / close /
 list_sessions / resume cycle for `backend:"codex"`. Phase 5 hardening
 landed: `requires_codex` pytest mark + `tests/blemees/test_daemon_e2e_codex.py`,
 `blemees/bench.py` rewritten with `--backend {claude,codex}`, structured
 JSON-RPC auth-error classification (`error.data.code` /
 `error.data.type` / message-pattern), mixed-backend
-`blemeesd.status_reply.sessions.by_backend` test, `BLEMEES_AGENTD_CODEX`
+`agent.status_reply.sessions.by_backend` test, `BLEMEES_AGENTD_CODEX`
 documented in both the systemd unit and the launchd plist, the
 existing `requires_claude` e2e suite migrated off the legacy `blemees/1`
 open shape, and the Codex `turn_aborted` event wired into
@@ -153,7 +153,7 @@ indistinguishable in shape from the Claude backend's.
 - The `Session.open_msg.resume` flag becomes a backend hint —
   `ClaudeBackend` mutates argv (existing behaviour);
   `CodexBackend` re-uses the stored id.
-- `blemeesd.opened.native_session_id` is populated for both backends
+- `agent.opened.native_session_id` is populated for both backends
   (currently always equals `session_id`).
 
 **Interrupt:**
@@ -243,7 +243,7 @@ Landed:
   symmetry with `codex-stdout-…`.
 - Stale `claude.user` / `claude.event` references in
   `blemees/backends/translate_claude.py` and
-  `blemees/schemas/inbound/blemeesd.watch.json` swapped for the
+  `blemees/schemas/inbound/agent.watch.json` swapped for the
   `agent.*` vocabulary.
 - `tests/blemees/test_daemon_e2e.py` renamed to
   `test_daemon_e2e_claude.py` (via `git mv`) so the layout matches
@@ -310,7 +310,7 @@ needs to reflect honestly.
   the timer to garbage.
 - **Legacy claude e2e tests had been silently skipping.** Phase 5
   found that `tests/blemees/test_daemon_e2e.py` was sending
-  `blemeesd.open` with the pre-`blemees/2` flat shape (top-level
+  `agent.open` with the pre-`blemees-agent/1` flat shape (top-level
   `model` / `tools` / `permission_mode`). The marker meant the
   failure stayed silent for two protocol bumps. Now migrated to
   `backend:"claude"` + `options.claude.{}`; if Phase 6 splits the

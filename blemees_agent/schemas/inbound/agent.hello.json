@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/inbound/blemeesd.hello.json",
-  "title": "blemeesd.hello",
+  "$id": "https://blemees/schemas/inbound/agent.hello.json",
+  "title": "agent.hello",
   "description": "First frame on every connection. Must arrive before any other frame.",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.hello" },
+    "type": { "const": "agent.hello" },
     "protocol": {
       "type": "string",
-      "description": "Protocol version. v0.1 speaks `blemees/2`. The daemon supports a single version at a time; pre-1.0 has no compatibility shim for `blemees/1`.",
-      "const": "blemees/2"
+      "description": "Protocol version. v0.1 speaks `blemees-agent/1`. The daemon supports a single version at a time; pre-1.0 has no compatibility shims for predecessor protocol identifiers.",
+      "const": "blemees-agent/1"
     },
     "client": {
       "type": "string",

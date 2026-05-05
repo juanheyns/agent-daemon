@@ -1,7 +1,7 @@
 # `agent.*` event vocabulary
 
 Authoritative mapping for the unified event namespace introduced in
-`blemees/2`. Every event the daemon forwards is normalised into one of
+`blemees-agent/1`. Every event the daemon forwards is normalised into one of
 the types below, regardless of which backend produced it.
 
 This document is the contract for the translation layer. The two
@@ -31,7 +31,7 @@ Every `agent.*` frame the daemon emits carries:
 | `session_id` | yes | The blemees session id (the daemon's, not the backend's). |
 | `seq` | yes | Monotonic per-session integer. |
 | `backend` | yes | `"claude"` or `"codex"`. Lets clients still distinguish if they want to. |
-| `raw` | optional | The native event the daemon translated from. Off by default; opt in per session via `blemeesd.open.options.<backend>.include_raw_events: true`. Format is the *un-namespaced* native frame (CC's stream-json line dict, or Codex's `msg` body). |
+| `raw` | optional | The native event the daemon translated from. Off by default; opt in per session via `agent.open.options.<backend>.include_raw_events: true`. Format is the *un-namespaced* native frame (CC's stream-json line dict, or Codex's `msg` body). |
 
 The on-the-wire shape never carries `null`s for absent fields — keys
 either appear with a value or are omitted entirely.
@@ -77,7 +77,7 @@ following invariants regardless of backend:
   synthesises a closing `agent.result` with the appropriate `subtype`
   (`error` or `interrupted`) and an `error: {code, message}` block.
   Codes used in synth results: `backend_crashed`, `auth_failed`. The
-  `blemeesd.error` frame is *also* emitted for visibility — clients
+  `agent.error` frame is *also* emitted for visibility — clients
   that wait on `agent.result` to detect turn end will not hang.
 
 - **Every turn opens with `agent.notice{category:"task_started"}`.**
@@ -113,7 +113,7 @@ following invariants regardless of backend:
   path).
 
 - **`native_session_id` is present iff it differs from `session_id`.**
-  On both `blemeesd.opened` and `agent.system_init` the field is
+  On both `agent.opened` and `agent.system_init` the field is
   emitted only when the backend's internal id differs from the
   daemon's. Absence is the canonical signal "use `session_id`
   directly". For Claude this means it's never present (CC's
@@ -167,8 +167,8 @@ splitting — see [`docs/asymmetries.md`](asymmetries.md).
 | `user{message: {content: [..., {type:"tool_result", tool_use_id, content, is_error}, ...]}}` | one `agent.tool_result{tool_use_id, output:content, is_error}` per `tool_result` block; remaining text blocks emit a single `agent.user_echo`. | Tool-result fan-out happens regardless of `user_echo`; the surrounding text echo follows the same toggle as the row above. |
 | `result{subtype, duration_ms, num_turns, usage}` | `agent.result{subtype, duration_ms, num_turns, turn_id, time_to_first_token_ms?, usage: <pass-through>}` | `turn_id` is the per-turn UUID hex; `time_to_first_token_ms` is daemon-side wall-clock from `send_user_turn` to the first model-output frame (`agent.delta` for long replies, `agent.message` / `agent.tool_use` for short replies CC didn't chunk). Both daemon-synthesised. |
 | `rate_limit_event{rate_limit_info, …}` | `agent.notice{level:"info", category:"rate_limits", data: {limit, vendor}}` | Per-turn CC rate-limit ping. Same unified `data.limit` envelope codex uses. The translator extracts `rate_limit_info.resetsAt` (Unix seconds → `resets_at_ms`) and `status` into `data.limit`; everything else (`rateLimitType`, overage flags, event-level `uuid` / `session_id`) lands under `data.vendor`. |
-| (synth, daemon-side; CC subprocess crashed mid-turn) | `agent.result{subtype:"error", num_turns:1, turn_id, time_to_first_token_ms?, error:{code:"backend_crashed", message}}` | Emitted alongside `blemeesd.error{backend_crashed}` so clients waiting on `agent.result` see a clean turn close (spec §5.6 invariant). |
-| (synth, daemon-side; CC stderr matched auth-failure pattern mid-turn) | `agent.result{subtype:"error", num_turns:1, turn_id, time_to_first_token_ms?, error:{code:"auth_failed", message}}` | Emitted alongside `blemeesd.error{auth_failed}`. |
+| (synth, daemon-side; CC subprocess crashed mid-turn) | `agent.result{subtype:"error", num_turns:1, turn_id, time_to_first_token_ms?, error:{code:"backend_crashed", message}}` | Emitted alongside `agent.error{backend_crashed}` so clients waiting on `agent.result` see a clean turn close (spec §5.6 invariant). |
+| (synth, daemon-side; CC stderr matched auth-failure pattern mid-turn) | `agent.result{subtype:"error", num_turns:1, turn_id, time_to_first_token_ms?, error:{code:"auth_failed", message}}` | Emitted alongside `agent.error{auth_failed}`. |
 
 ## Translation: Codex MCP → `agent.*`
 
@@ -202,7 +202,7 @@ originating `tools/call`, plus the preceding `task_complete` and last
 | `task_complete{turn_id, duration_ms, time_to_first_token_ms, last_agent_message}` | folded into the synthesised `agent.result` | |
 | JSON-RPC `result{content, structuredContent:{threadId, content}}` | terminal `agent.result{subtype:"success", duration_ms, num_turns:1, turn_id, time_to_first_token_ms?, usage}` | Errors surface as `subtype:"error"` with the JSON-RPC error data on `agent.result.error`. |
 | Cancelled turn (we sent `notifications/cancelled`) | `agent.result{subtype:"interrupted"}` | |
-| (synth, daemon-side; codex subprocess crashed mid-turn) | `agent.result{subtype:"error", num_turns:1, turn_id?, time_to_first_token_ms?, error:{code:"backend_crashed", message}}` | Emitted alongside `blemeesd.error{backend_crashed}` so clients waiting on `agent.result` see a clean turn close. Mirrors the Claude path. |
+| (synth, daemon-side; codex subprocess crashed mid-turn) | `agent.result{subtype:"error", num_turns:1, turn_id?, time_to_first_token_ms?, error:{code:"backend_crashed", message}}` | Emitted alongside `agent.error{backend_crashed}` so clients waiting on `agent.result` see a clean turn close. Mirrors the Claude path. |
 
 ## Inbound: user turns
 
@@ -228,7 +228,7 @@ Per-backend translation:
 
 A future addition (`agent.user.attachments` or similar) can lift this
 limitation when Codex exposes image/file inputs through MCP. For
-`blemees/2`, text-only is the documented behaviour for the codex backend.
+`blemees-agent/1`, text-only is the documented behaviour for the codex backend.
 
 ## What `raw` carries
 
@@ -254,7 +254,7 @@ event type:
 1. Capture a fresh trace under `docs/traces/`.
 2. Add a row to the relevant translation table above.
 3. Decide: drop, route to existing `agent.*` type, or extend the vocab.
-   Extending the vocab is a `blemees/3` change.
+   Extending the vocab is a `blemees-agent/2` change.
 4. Update schemas + tests in lockstep.
 
 Backends that gain *fields* on an existing event type are non-breaking:

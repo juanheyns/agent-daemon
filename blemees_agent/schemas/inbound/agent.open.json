@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/inbound/blemeesd.open.json",
-  "title": "blemeesd.open",
+  "$id": "https://blemees/schemas/inbound/agent.open.json",
+  "title": "agent.open",
   "description": "Open or reattach a session. The envelope is backend-neutral; backend-specific knobs live under options.<backend> (see options.claude.json / options.codex.json). Only the options block matching the chosen `backend` is consulted; sibling blocks for other backends are ignored.",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.open" },
+    "type": { "const": "agent.open" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
     "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "backend": { "$ref": "https://blemees/schemas/_common.json#/$defs/Backend" },

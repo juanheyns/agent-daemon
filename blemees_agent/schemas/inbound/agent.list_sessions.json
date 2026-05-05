@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/inbound/blemeesd.list_sessions.json",
-  "title": "blemeesd.list_sessions",
+  "$id": "https://blemees/schemas/inbound/agent.list_sessions.json",
+  "title": "agent.list_sessions",
   "description": "Enumerate sessions known to the daemon. `cwd` and `live` are independent, fully-composable filters; omitting a filter means \"no filter on that axis\". `cwd` set restricts to that working directory; absent walks every project under `~/.claude/projects/` and every cwd under `~/.codex/sessions/`. `live:true` includes only sessions live in the daemon's SessionTable. `live:false` includes only cold (on-disk) sessions, subtracting any session that's currently live. `live` absent merges both. Empty body means \"every session, everywhere\" — including a full disk walk; clients that just want \"what's running now\" should pass `live:true`.",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.list_sessions" },
+    "type": { "const": "agent.list_sessions" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
     "cwd": {
       "type": "string",

@@ -1,4 +1,4 @@
-"""Unit tests for blemees_agent.protocol (blemees/2)."""
+"""Unit tests for blemees_agent.protocol (blemees-agent/1)."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ from blemees_agent.protocol import (
 
 
 def test_encode_is_newline_terminated_utf8():
-    data = encode({"type": "blemeesd.hello", "emoji": "🌟"})
+    data = encode({"type": "agent.hello", "emoji": "🌟"})
     assert data.endswith(b"\n")
     assert b"\n" not in data[:-1]
     decoded = json.loads(data)
@@ -50,8 +50,8 @@ def test_encode_is_newline_terminated_utf8():
 
 
 def test_parse_line_accepts_valid_object():
-    obj = parse_line(b'{"type":"blemeesd.hello","protocol":"blemees/2"}\n')
-    assert obj["type"] == "blemeesd.hello"
+    obj = parse_line(b'{"type":"agent.hello","protocol":"blemees-agent/1"}\n')
+    assert obj["type"] == "agent.hello"
 
 
 def test_parse_line_rejects_non_object():
@@ -98,19 +98,19 @@ def test_parse_line_allows_embedded_nul_in_json_string():
 
 def test_parse_hello_requires_protocol():
     with pytest.raises(ProtocolError):
-        parse_hello({"type": "blemeesd.hello"})
+        parse_hello({"type": "agent.hello"})
 
 
 def test_parse_hello_ok():
-    h = parse_hello({"type": "blemeesd.hello", "protocol": "blemees/2", "client": "t/0.1"})
-    assert h.protocol == "blemees/2"
+    h = parse_hello({"type": "agent.hello", "protocol": "blemees-agent/1", "client": "t/0.1"})
+    assert h.protocol == "blemees-agent/1"
     assert h.client == "t/0.1"
 
 
 def test_hello_ack_shape():
     ack = hello_ack("0.1.0", 1234, {"claude": "2.1.118", "codex": "0.125.0"})
-    assert ack["type"] == "blemeesd.hello_ack"
-    assert ack["daemon"] == "blemeesd/0.1.0"
+    assert ack["type"] == "agent.hello_ack"
+    assert ack["daemon"] == "blemees-agentd/0.1.0"
     assert ack["protocol"] == PROTOCOL_VERSION
     assert ack["pid"] == 1234
     assert ack["backends"] == {"claude": "2.1.118", "codex": "0.125.0"}
@@ -124,7 +124,7 @@ def test_hello_ack_shape():
 def _open_frame(**overrides):
     """Helper for the canonical claude open frame."""
     base = {
-        "type": "blemeesd.open",
+        "type": "agent.open",
         "session_id": "s1",
         "backend": "claude",
         "options": {"claude": {}},
@@ -143,19 +143,19 @@ def test_parse_open_minimal_claude():
 
 def test_parse_open_requires_session():
     with pytest.raises(ProtocolError):
-        parse_open({"type": "blemeesd.open", "backend": "claude", "options": {"claude": {}}})
+        parse_open({"type": "agent.open", "backend": "claude", "options": {"claude": {}}})
 
 
 def test_parse_open_requires_backend():
     with pytest.raises(ProtocolError):
-        parse_open({"type": "blemeesd.open", "session_id": "s1", "options": {}})
+        parse_open({"type": "agent.open", "session_id": "s1", "options": {}})
 
 
 def test_parse_open_rejects_unknown_backend():
     with pytest.raises(UnknownBackendError):
         parse_open(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "session_id": "s1",
                 "backend": "anthropic",
                 "options": {},
@@ -187,7 +187,7 @@ def test_parse_open_rejects_sibling_options_block():
     with pytest.raises(ProtocolError):
         parse_open(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "session_id": "s1",
                 "backend": "claude",
                 "options": {"claude": {}, "anthropic": {}},
@@ -198,7 +198,7 @@ def test_parse_open_rejects_sibling_options_block():
 def test_parse_open_extracts_chosen_backend_options():
     msg = parse_open(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "session_id": "s1",
             "backend": "claude",
             "options": {"claude": {"model": "sonnet", "tools": ""}},
@@ -414,16 +414,16 @@ def test_build_user_stdin_line_preserves_multimodal_blocks():
 
 def test_parse_interrupt_requires_session():
     with pytest.raises(ProtocolError):
-        parse_interrupt({"type": "blemeesd.interrupt"})
+        parse_interrupt({"type": "agent.interrupt"})
 
 
 def test_parse_close_defaults_delete_false():
-    c = parse_close({"type": "blemeesd.close", "session_id": "s1"})
+    c = parse_close({"type": "agent.close", "session_id": "s1"})
     assert c.delete is False
 
 
 def test_parse_close_delete_true():
-    c = parse_close({"type": "blemeesd.close", "session_id": "s1", "delete": True})
+    c = parse_close({"type": "agent.close", "session_id": "s1", "delete": True})
     assert c.delete is True
 
 
@@ -435,7 +435,7 @@ def test_parse_close_delete_true():
 def test_parse_list_sessions_empty_body_means_no_filters():
     """Both axes unfiltered: the daemon walks every project + every
     live session, returning the union."""
-    msg = parse_list_sessions({"type": "blemeesd.list_sessions"})
+    msg = parse_list_sessions({"type": "agent.list_sessions"})
     assert msg.cwd is None
     assert msg.live is None  # tri-state: None = unfiltered
 
@@ -443,7 +443,7 @@ def test_parse_list_sessions_empty_body_means_no_filters():
 def test_parse_list_sessions_with_cwd_only():
     """The original v0.1 contract: filter by cwd, both live and disk."""
     msg = parse_list_sessions(
-        {"type": "blemeesd.list_sessions", "id": "r1", "cwd": "/home/u/proj"}
+        {"type": "agent.list_sessions", "id": "r1", "cwd": "/home/u/proj"}
     )
     assert msg.cwd == "/home/u/proj"
     assert msg.id == "r1"
@@ -451,7 +451,7 @@ def test_parse_list_sessions_with_cwd_only():
 
 
 def test_parse_list_sessions_live_true_only():
-    msg = parse_list_sessions({"type": "blemeesd.list_sessions", "live": True})
+    msg = parse_list_sessions({"type": "agent.list_sessions", "live": True})
     assert msg.cwd is None
     assert msg.live is True
 
@@ -459,14 +459,14 @@ def test_parse_list_sessions_live_true_only():
 def test_parse_list_sessions_live_false_only():
     """Cold-only listing across every cwd. Allowed; the user accepts
     the cost of the full disk scan."""
-    msg = parse_list_sessions({"type": "blemeesd.list_sessions", "live": False})
+    msg = parse_list_sessions({"type": "agent.list_sessions", "live": False})
     assert msg.cwd is None
     assert msg.live is False
 
 
 def test_parse_list_sessions_cwd_plus_live_true():
     msg = parse_list_sessions(
-        {"type": "blemeesd.list_sessions", "cwd": "/proj", "live": True}
+        {"type": "agent.list_sessions", "cwd": "/proj", "live": True}
     )
     assert msg.cwd == "/proj"
     assert msg.live is True
@@ -474,7 +474,7 @@ def test_parse_list_sessions_cwd_plus_live_true():
 
 def test_parse_list_sessions_cwd_plus_live_false():
     msg = parse_list_sessions(
-        {"type": "blemeesd.list_sessions", "cwd": "/proj", "live": False}
+        {"type": "agent.list_sessions", "cwd": "/proj", "live": False}
     )
     assert msg.cwd == "/proj"
     assert msg.live is False
@@ -482,17 +482,17 @@ def test_parse_list_sessions_cwd_plus_live_false():
 
 def test_parse_list_sessions_rejects_non_string_cwd():
     with pytest.raises(ProtocolError):
-        parse_list_sessions({"type": "blemeesd.list_sessions", "cwd": 42})
+        parse_list_sessions({"type": "agent.list_sessions", "cwd": 42})
 
 
 def test_parse_list_sessions_rejects_empty_cwd():
     with pytest.raises(ProtocolError):
-        parse_list_sessions({"type": "blemeesd.list_sessions", "cwd": ""})
+        parse_list_sessions({"type": "agent.list_sessions", "cwd": ""})
 
 
 def test_parse_list_sessions_rejects_non_bool_live():
     with pytest.raises(ProtocolError):
-        parse_list_sessions({"type": "blemeesd.list_sessions", "live": "yes"})
+        parse_list_sessions({"type": "agent.list_sessions", "live": "yes"})
 
 
 # ---------------------------------------------------------------------------
@@ -521,29 +521,29 @@ def test_error_frame_omits_unset_ids():
 
 
 def test_parse_ping_ok_no_data():
-    msg = parse_ping({"type": "blemeesd.ping"})
+    msg = parse_ping({"type": "agent.ping"})
     assert msg.id is None
 
 
 def test_parse_ping_ok_with_id_and_data():
-    msg = parse_ping({"type": "blemeesd.ping", "id": "p1", "data": {"x": 1}})
+    msg = parse_ping({"type": "agent.ping", "id": "p1", "data": {"x": 1}})
     assert msg.id == "p1"
     assert msg.data == {"x": 1}
 
 
 def test_parse_ping_rejects_extra_keys():
     with pytest.raises(ProtocolError, match="unexpected field"):
-        parse_ping({"type": "blemeesd.ping", "bogus": True})
+        parse_ping({"type": "agent.ping", "bogus": True})
 
 
 def test_parse_status_ok():
-    msg = parse_status({"type": "blemeesd.status", "id": "s1"})
+    msg = parse_status({"type": "agent.status", "id": "s1"})
     assert msg.id == "s1"
 
 
 def test_parse_status_rejects_extra_keys():
     with pytest.raises(ProtocolError, match="unexpected field"):
-        parse_status({"type": "blemeesd.status", "extra": 1})
+        parse_status({"type": "agent.status", "extra": 1})
 
 
 # ---------------------------------------------------------------------------
@@ -553,7 +553,7 @@ def test_parse_status_rejects_extra_keys():
 
 def test_parse_hello_rejects_extra_keys():
     with pytest.raises(ProtocolError, match="unexpected field"):
-        parse_hello({"type": "blemeesd.hello", "protocol": "blemees/2", "unknown": True})
+        parse_hello({"type": "agent.hello", "protocol": "blemees-agent/1", "unknown": True})
 
 
 def test_parse_user_rejects_extra_keys():
@@ -570,32 +570,32 @@ def test_parse_user_rejects_extra_keys():
 
 def test_parse_interrupt_rejects_extra_keys():
     with pytest.raises(ProtocolError, match="unexpected field"):
-        parse_interrupt({"type": "blemeesd.interrupt", "session_id": "s1", "extra": 1})
+        parse_interrupt({"type": "agent.interrupt", "session_id": "s1", "extra": 1})
 
 
 def test_parse_close_rejects_extra_keys():
     with pytest.raises(ProtocolError, match="unexpected field"):
-        parse_close({"type": "blemeesd.close", "session_id": "s1", "extra": 1})
+        parse_close({"type": "agent.close", "session_id": "s1", "extra": 1})
 
 
 def test_parse_list_sessions_rejects_extra_keys():
     with pytest.raises(ProtocolError, match="unexpected field"):
-        parse_list_sessions({"type": "blemeesd.list_sessions", "cwd": "/tmp", "extra": 1})
+        parse_list_sessions({"type": "agent.list_sessions", "cwd": "/tmp", "extra": 1})
 
 
 def test_parse_watch_rejects_extra_keys():
     with pytest.raises(ProtocolError, match="unexpected field"):
-        parse_watch({"type": "blemeesd.watch", "session_id": "s1", "extra": 1})
+        parse_watch({"type": "agent.watch", "session_id": "s1", "extra": 1})
 
 
 def test_parse_unwatch_rejects_extra_keys():
     with pytest.raises(ProtocolError, match="unexpected field"):
-        parse_unwatch({"type": "blemeesd.unwatch", "session_id": "s1", "extra": 1})
+        parse_unwatch({"type": "agent.unwatch", "session_id": "s1", "extra": 1})
 
 
 def test_parse_session_info_rejects_extra_keys():
     with pytest.raises(ProtocolError, match="unexpected field"):
-        parse_session_info({"type": "blemeesd.session_info", "session_id": "s1", "extra": 1})
+        parse_session_info({"type": "agent.session_info", "session_id": "s1", "extra": 1})
 
 
 def test_parse_open_rejects_extra_keys():

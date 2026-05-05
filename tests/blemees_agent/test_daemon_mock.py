@@ -24,13 +24,13 @@ async def test_hello_roundtrip(daemon_and_socket):
     reader, writer = await asyncio.open_unix_connection(path)
     writer.write(
         (
-            json.dumps({"type": "blemeesd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION})
+            json.dumps({"type": "agent.hello", "client": "t/0", "protocol": PROTOCOL_VERSION})
             + "\n"
         ).encode()
     )
     await writer.drain()
     ack = json.loads((await reader.readuntil(b"\n")).decode())
-    assert ack["type"] == "blemeesd.hello_ack"
+    assert ack["type"] == "agent.hello_ack"
     assert ack["protocol"] == PROTOCOL_VERSION
     writer.close()
     await writer.wait_closed()
@@ -39,10 +39,10 @@ async def test_hello_roundtrip(daemon_and_socket):
 async def test_protocol_mismatch_closes_connection(daemon_and_socket):
     _daemon, path = daemon_and_socket
     reader, writer = await asyncio.open_unix_connection(path)
-    writer.write((json.dumps({"type": "blemeesd.hello", "protocol": "blemees/99"}) + "\n").encode())
+    writer.write((json.dumps({"type": "agent.hello", "protocol": "blemees/99"}) + "\n").encode())
     await writer.drain()
     err = json.loads((await reader.readuntil(b"\n")).decode())
-    assert err["type"] == "blemeesd.error"
+    assert err["type"] == "agent.error"
     assert err["code"] == "protocol_mismatch"
 
 
@@ -51,14 +51,14 @@ async def test_open_then_user_then_result(client_factory, fake_mode):
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "s1",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    opened = await client.wait_for(lambda e: e["type"] == "blemeesd.opened")
+    opened = await client.wait_for(lambda e: e["type"] == "agent.opened")
     assert opened["session_id"] == "s1"
     await client.send(
         {"type": "agent.user", "session_id": "s1", "message": {"role": "user", "content": "hello"}}
@@ -79,14 +79,14 @@ async def test_codex_backend_open_user_result(client_factory, fake_mode):
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "cx-1",
             "backend": "codex",
             "options": {"codex": {"sandbox": "read-only", "approval-policy": "never"}},
         }
     )
-    opened = await client.wait_for(lambda e: e["type"] == "blemeesd.opened")
+    opened = await client.wait_for(lambda e: e["type"] == "agent.opened")
     assert opened["session_id"] == "cx-1"
     assert opened["backend"] == "codex"
     await client.send(
@@ -121,28 +121,28 @@ async def test_unsafe_flag_rejected_on_open(client_factory):
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "s1",
             "backend": "claude",
             "options": {"claude": {"dangerously_skip_permissions": True}},
         }
     )
-    err = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
+    err = await client.wait_for(lambda e: e.get("type") == "agent.error")
     assert err["code"] == "unsafe_flag"
 
 
 async def test_unknown_message_returns_error(client_factory):
     client = await client_factory()
-    await client.send({"type": "blemeesd.nonsense", "session_id": "s1"})
-    err = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
+    await client.send({"type": "agent.nonsense", "session_id": "s1"})
+    err = await client.wait_for(lambda e: e.get("type") == "agent.error")
     assert err["code"] == "unknown_message"
 
 
 async def test_ping_replies_with_pong(client_factory):
     client = await client_factory()
-    await client.send({"type": "blemeesd.ping", "id": "ping-1", "data": 42})
-    pong = await client.wait_for(lambda e: e.get("type") == "blemeesd.pong")
+    await client.send({"type": "agent.ping", "id": "ping-1", "data": 42})
+    pong = await client.wait_for(lambda e: e.get("type") == "agent.pong")
     assert pong["id"] == "ping-1"
     assert pong["data"] == 42
 
@@ -152,7 +152,7 @@ async def test_session_flag_mapping_in_argv(client_factory, fake_mode, argv_trac
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "s-map",
             "backend": "claude",
@@ -165,7 +165,7 @@ async def test_session_flag_mapping_in_argv(client_factory, fake_mode, argv_trac
             },
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
     # Wait for the first CC event so we know fake_claude has recorded its argv.
     await client.wait_for(lambda e: e.get("type") == "agent.system_init")
     argv_lines = Path(argv_trace_path).read_text().strip().splitlines()
@@ -186,7 +186,7 @@ async def test_resume_flag_used_when_requested(client_factory, fake_mode, argv_t
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "s-resume",
             "backend": "claude",
@@ -194,7 +194,7 @@ async def test_resume_flag_used_when_requested(client_factory, fake_mode, argv_t
             "options": {"claude": {"tools": ""}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
     await client.wait_for(lambda e: e.get("type") == "agent.system_init")
     argv = json.loads(Path(argv_trace_path).read_text().strip().splitlines()[0])
     assert "--resume" in argv
@@ -208,21 +208,21 @@ async def test_interrupt_respawns_with_resume(
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "s-int",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
     await client.send(
         {"type": "agent.user", "session_id": "s-int", "message": {"role": "user", "content": "go"}}
     )
     # Wait until streaming starts.
     await client.wait_for(lambda e: e.get("type") == "agent.delta")
-    await client.send({"type": "blemeesd.interrupt", "session_id": "s-int"})
-    ir = await client.wait_for(lambda e: e.get("type") == "blemeesd.interrupted")
+    await client.send({"type": "agent.interrupt", "session_id": "s-int"})
+    ir = await client.wait_for(lambda e: e.get("type") == "agent.interrupted")
     assert ir["was_idle"] is False
 
     # After interrupt the argv trace should contain a second line using --resume.
@@ -242,7 +242,7 @@ async def test_interrupt_respawns_with_resume(
 async def test_interrupt_emits_synthesized_agent_result(client_factory, fake_mode):
     """The claude backend synthesises ``agent.result{subtype:"interrupted"}``
     after a kill mid-turn (spec §5.7). The order on the wire must be
-    ``blemeesd.interrupted`` first, then the synthesised
+    ``agent.interrupted`` first, then the synthesised
     ``agent.result`` — matching how codex emits the equivalent via its
     ``turn_aborted`` event.
     """
@@ -250,14 +250,14 @@ async def test_interrupt_emits_synthesized_agent_result(client_factory, fake_mod
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "s-synth",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
     await client.send(
         {
             "type": "agent.user",
@@ -266,27 +266,27 @@ async def test_interrupt_emits_synthesized_agent_result(client_factory, fake_mod
         }
     )
     await client.wait_for(lambda e: e.get("type") == "agent.delta")
-    await client.send({"type": "blemeesd.interrupt", "session_id": "s-synth"})
+    await client.send({"type": "agent.interrupt", "session_id": "s-synth"})
 
     # Drain frames until both the ack and the synthesised result land.
     seen: dict[str, dict] = {}
     deadline = asyncio.get_running_loop().time() + 5.0
-    while not ({"blemeesd.interrupted", "agent.result"} <= seen.keys()):
+    while not ({"agent.interrupted", "agent.result"} <= seen.keys()):
         remaining = deadline - asyncio.get_running_loop().time()
         assert remaining > 0, f"missing frames; got={list(seen)}"
         evt = await client.recv(timeout=remaining)
         t = evt.get("type")
-        if t == "blemeesd.interrupted":
-            seen.setdefault("blemeesd.interrupted", evt)
+        if t == "agent.interrupted":
+            seen.setdefault("agent.interrupted", evt)
         elif t == "agent.result" and evt.get("session_id") == "s-synth":
             seen.setdefault("agent.result", evt)
-    assert seen["blemeesd.interrupted"]["was_idle"] is False
+    assert seen["agent.interrupted"]["was_idle"] is False
     assert seen["agent.result"]["subtype"] == "interrupted"
     assert seen["agent.result"]["backend"] == "claude"
     # Order check: the synthesised agent.result must arrive *after* the
-    # blemeesd.interrupted ack so clients can rely on it as a clean
+    # agent.interrupted ack so clients can rely on it as a clean
     # turn-end marker (matching codex's order).
-    assert seen["agent.result"]["seq"] > seen["blemeesd.interrupted"].get("seq", 0)
+    assert seen["agent.result"]["seq"] > seen["agent.interrupted"].get("seq", 0)
 
 
 async def test_concurrent_sessions_dont_interfere(client_factory, fake_mode):
@@ -295,7 +295,7 @@ async def test_concurrent_sessions_dont_interfere(client_factory, fake_mode):
     for sid in ("a", "b", "c"):
         await client.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": f"r{sid}",
                 "session_id": sid,
                 "backend": "claude",
@@ -305,7 +305,7 @@ async def test_concurrent_sessions_dont_interfere(client_factory, fake_mode):
     opens = set()
     while len(opens) < 3:
         evt = await client.recv(timeout=5.0)
-        if evt.get("type") == "blemeesd.opened":
+        if evt.get("type") == "agent.opened":
             opens.add(evt["session_id"])
 
     for sid in ("a", "b", "c"):
@@ -330,14 +330,14 @@ async def test_crash_mid_turn_then_recover(client_factory, fake_mode, monkeypatc
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "s-crash",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
     await client.send(
         {
             "type": "agent.user",
@@ -346,7 +346,7 @@ async def test_crash_mid_turn_then_recover(client_factory, fake_mode, monkeypatc
         }
     )
     err = await client.wait_for(
-        lambda e: e.get("type") == "blemeesd.error" and e.get("code") == "backend_crashed"
+        lambda e: e.get("type") == "agent.error" and e.get("code") == "backend_crashed"
     )
     assert err["session_id"] == "s-crash"
 
@@ -369,31 +369,31 @@ async def test_close_removes_session(client_factory, fake_mode):
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "s-close",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
     await client.send(
-        {"type": "blemeesd.close", "id": "r2", "session_id": "s-close", "delete": False}
+        {"type": "agent.close", "id": "r2", "session_id": "s-close", "delete": False}
     )
-    closed = await client.wait_for(lambda e: e.get("type") == "blemeesd.closed")
+    closed = await client.wait_for(lambda e: e.get("type") == "agent.closed")
     assert closed["session_id"] == "s-close"
 
     # Re-open without resume should succeed since session is gone.
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r3",
             "session_id": "s-close",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
 
 
 async def test_detach_allows_reattach_via_resume(client_factory, fake_mode):
@@ -401,21 +401,21 @@ async def test_detach_allows_reattach_via_resume(client_factory, fake_mode):
     c1 = await client_factory()
     await c1.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "s-det",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await c1.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await c1.wait_for(lambda e: e.get("type") == "agent.opened")
     await c1.close()
 
     # New connection can reattach via resume:true.
     c2 = await client_factory()
     await c2.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r2",
             "session_id": "s-det",
             "backend": "claude",
@@ -423,18 +423,18 @@ async def test_detach_allows_reattach_via_resume(client_factory, fake_mode):
             "options": {"claude": {"tools": ""}},
         }
     )
-    await c2.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await c2.wait_for(lambda e: e.get("type") == "agent.opened")
 
 
 async def test_invalid_message_keeps_connection_alive(client_factory):
     client = await client_factory()
     # Send a malformed open (no session).
-    await client.send({"type": "blemeesd.open", "id": "bad"})
-    err = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
+    await client.send({"type": "agent.open", "id": "bad"})
+    err = await client.wait_for(lambda e: e.get("type") == "agent.error")
     assert err["code"] == "invalid_message"
     # Connection still usable: a truly unknown type still returns unknown.
-    await client.send({"type": "blemeesd.nonsense_xyz"})
-    err2 = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
+    await client.send({"type": "agent.nonsense_xyz"})
+    err2 = await client.wait_for(lambda e: e.get("type") == "agent.error")
     assert err2["code"] == "unknown_message"
 
 
@@ -497,17 +497,17 @@ async def test_list_sessions_empty_body_unions_disk_and_live(
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "open-1",
             "session_id": "warm",
             "backend": "claude",
             "options": {"claude": {"tools": "", "cwd": cwd_a}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
 
-    await client.send({"type": "blemeesd.list_sessions", "id": "r1"})
-    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
+    await client.send({"type": "agent.list_sessions", "id": "r1"})
+    reply = await client.wait_for(lambda e: e.get("type") == "agent.sessions")
     assert reply["id"] == "r1"
     assert "cwd" not in reply  # no filter echoed
     ids = {s["session_id"] for s in reply["sessions"]}
@@ -535,7 +535,7 @@ async def test_list_sessions_live_true_returns_all_live(
     for sid, cwd in (("liveA", str(cwd_a)), ("liveB", str(cwd_b))):
         await client.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": f"open-{sid}",
                 "session_id": sid,
                 "backend": "claude",
@@ -543,11 +543,11 @@ async def test_list_sessions_live_true_returns_all_live(
             }
         )
         await client.wait_for(
-            lambda e, s=sid: e.get("type") == "blemeesd.opened" and e.get("session_id") == s
+            lambda e, s=sid: e.get("type") == "agent.opened" and e.get("session_id") == s
         )
 
-    await client.send({"type": "blemeesd.list_sessions", "id": "r1", "live": True})
-    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
+    await client.send({"type": "agent.list_sessions", "id": "r1", "live": True})
+    reply = await client.wait_for(lambda e: e.get("type") == "agent.sessions")
     ids = {s["session_id"] for s in reply["sessions"]}
     assert {"liveA", "liveB"}.issubset(ids)
     assert "cwd" not in reply
@@ -580,7 +580,7 @@ async def test_list_sessions_live_false_excludes_currently_live(
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "open-1",
             "session_id": "warm",
             "backend": "claude",
@@ -588,12 +588,12 @@ async def test_list_sessions_live_false_excludes_currently_live(
             "resume": True,
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
 
     await client.send(
-        {"type": "blemeesd.list_sessions", "id": "r1", "cwd": cwd, "live": False}
+        {"type": "agent.list_sessions", "id": "r1", "cwd": cwd, "live": False}
     )
-    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
+    reply = await client.wait_for(lambda e: e.get("type") == "agent.sessions")
     ids = {s["session_id"] for s in reply["sessions"]}
     assert "old-cold" in ids
     assert "warm" not in ids  # live, so excluded from the cold-only set
@@ -614,19 +614,19 @@ async def test_list_sessions_cwd_plus_live_true_skips_disk(
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "open-1",
             "session_id": "warm",
             "backend": "claude",
             "options": {"claude": {"tools": "", "cwd": cwd}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
 
     await client.send(
-        {"type": "blemeesd.list_sessions", "id": "r1", "cwd": cwd, "live": True}
+        {"type": "agent.list_sessions", "id": "r1", "cwd": cwd, "live": True}
     )
-    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
+    reply = await client.wait_for(lambda e: e.get("type") == "agent.sessions")
     ids = {s["session_id"] for s in reply["sessions"]}
     assert "warm" in ids
     assert "old-cold" not in ids  # disk scan was skipped
@@ -636,8 +636,8 @@ async def test_list_sessions_cwd_plus_live_true_skips_disk(
 async def test_list_sessions_empty_for_unknown_cwd(client_factory, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     client = await client_factory()
-    await client.send({"type": "blemeesd.list_sessions", "id": "r1", "cwd": "/nope/nope"})
-    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
+    await client.send({"type": "agent.list_sessions", "id": "r1", "cwd": "/nope/nope"})
+    reply = await client.wait_for(lambda e: e.get("type") == "agent.sessions")
     assert reply["id"] == "r1"
     assert reply["cwd"] == "/nope/nope"
     assert reply["sessions"] == []
@@ -650,8 +650,8 @@ async def test_list_sessions_returns_sorted_on_disk(client_factory, tmp_path, mo
     _seed_transcript(tmp_path, cwd, "newer", "new one", 1_700_000_100)
 
     client = await client_factory()
-    await client.send({"type": "blemeesd.list_sessions", "id": "r1", "cwd": cwd})
-    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
+    await client.send({"type": "agent.list_sessions", "id": "r1", "cwd": cwd})
+    reply = await client.wait_for(lambda e: e.get("type") == "agent.sessions")
     ids = [s["session_id"] for s in reply["sessions"]]
     assert ids == ["newer", "older"]
     assert reply["sessions"][0]["preview"] == "new one"
@@ -666,17 +666,17 @@ async def test_list_sessions_flags_attached(client_factory, fake_mode, tmp_path,
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "live",
             "backend": "claude",
             "options": {"claude": {"tools": "", "cwd": cwd}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
 
-    await client.send({"type": "blemeesd.list_sessions", "id": "r2", "cwd": cwd})
-    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
+    await client.send({"type": "agent.list_sessions", "id": "r2", "cwd": cwd})
+    reply = await client.wait_for(lambda e: e.get("type") == "agent.sessions")
     records = {s["session_id"]: s for s in reply["sessions"]}
     assert "live" in records
     assert records["live"]["attached"] is True
@@ -738,8 +738,8 @@ async def test_list_sessions_merges_claude_and_codex_rows(client_factory, tmp_pa
     )
 
     client = await client_factory()
-    await client.send({"type": "blemeesd.list_sessions", "id": "r1", "cwd": cwd})
-    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.sessions")
+    await client.send({"type": "agent.list_sessions", "id": "r1", "cwd": cwd})
+    reply = await client.wait_for(lambda e: e.get("type") == "agent.sessions")
     rows = reply["sessions"]
     backends = {r["session_id"]: r["backend"] for r in rows}
     assert backends["claude-1"] == "claude"
@@ -763,14 +763,14 @@ async def test_codex_session_resume_uses_codex_reply(
     c1 = await client_factory()
     await c1.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "cx-resume",
             "backend": "codex",
             "options": {"codex": {"sandbox": "read-only"}},
         }
     )
-    await c1.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await c1.wait_for(lambda e: e.get("type") == "agent.opened")
     await c1.send(
         {
             "type": "agent.user",
@@ -795,7 +795,7 @@ async def test_codex_session_resume_uses_codex_reply(
     c2 = await client_factory()
     await c2.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r2",
             "session_id": "cx-resume",
             "backend": "codex",
@@ -804,7 +804,7 @@ async def test_codex_session_resume_uses_codex_reply(
             "options": {"codex": {"sandbox": "read-only"}},
         }
     )
-    opened = await c2.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    opened = await c2.wait_for(lambda e: e.get("type") == "agent.opened")
     # native_session_id should be populated now (we know the threadId
     # from the previous turn).
     assert opened.get("native_session_id"), opened
@@ -834,7 +834,7 @@ async def test_status_by_backend_counts_mixed_sessions(client_factory, fake_mode
 
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "rc",
             "session_id": "claude-1",
             "backend": "claude",
@@ -842,12 +842,12 @@ async def test_status_by_backend_counts_mixed_sessions(client_factory, fake_mode
         }
     )
     await client.wait_for(
-        lambda e: e.get("type") == "blemeesd.opened" and e.get("session_id") == "claude-1"
+        lambda e: e.get("type") == "agent.opened" and e.get("session_id") == "claude-1"
     )
 
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "rx",
             "session_id": "codex-1",
             "backend": "codex",
@@ -855,11 +855,11 @@ async def test_status_by_backend_counts_mixed_sessions(client_factory, fake_mode
         }
     )
     await client.wait_for(
-        lambda e: e.get("type") == "blemeesd.opened" and e.get("session_id") == "codex-1"
+        lambda e: e.get("type") == "agent.opened" and e.get("session_id") == "codex-1"
     )
 
-    await client.send({"type": "blemeesd.status", "id": "s1"})
-    snap = await client.wait_for(lambda e: e.get("type") == "blemeesd.status_reply")
+    await client.send({"type": "agent.status", "id": "s1"})
+    snap = await client.wait_for(lambda e: e.get("type") == "agent.status_reply")
     by_backend = snap["sessions"]["by_backend"]
     assert by_backend.get("claude") == 1, snap
     assert by_backend.get("codex") == 1, snap
@@ -882,14 +882,14 @@ async def test_codex_close_with_delete_preserves_rollout(
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "cx-del",
             "backend": "codex",
             "options": {"codex": {}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
     await client.send(
         {
             "type": "agent.user",
@@ -912,13 +912,13 @@ async def test_codex_close_with_delete_preserves_rollout(
     try:
         await client.send(
             {
-                "type": "blemeesd.close",
+                "type": "agent.close",
                 "id": "r2",
                 "session_id": "cx-del",
                 "delete": True,
             }
         )
-        await client.wait_for(lambda e: e.get("type") == "blemeesd.closed")
+        await client.wait_for(lambda e: e.get("type") == "agent.closed")
         assert fake_rollout.is_file(), (
             "backend rollout should not be deleted (codex's directory is its own)"
         )
@@ -939,19 +939,19 @@ async def test_takeover_notifies_previous_owner(client_factory, fake_mode):
 
     await a.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "shared",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await a.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await a.wait_for(lambda e: e.get("type") == "agent.opened")
 
     # B takes over via resume=true.
     await b.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r2",
             "session_id": "shared",
             "backend": "claude",
@@ -962,14 +962,14 @@ async def test_takeover_notifies_previous_owner(client_factory, fake_mode):
 
     # A must see the notification.
     notice = await a.wait_for(
-        lambda e: e.get("type") == "blemeesd.session_taken" and e.get("session_id") == "shared"
+        lambda e: e.get("type") == "agent.session_taken" and e.get("session_id") == "shared"
     )
     # Informational peer_pid may be absent in tests (no SO_PEERCRED capture
     # for in-process unix sockets on some kernels), but the frame must arrive.
     assert notice["session_id"] == "shared"
 
     # B's ack arrives and the event stream now flows to B.
-    await b.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await b.wait_for(lambda e: e.get("type") == "agent.opened")
     await b.send(
         {
             "type": "agent.user",
@@ -985,19 +985,19 @@ async def test_no_takeover_notice_for_same_connection_reopen(client_factory, fak
     c = await client_factory()
     await c.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "self",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await c.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await c.wait_for(lambda e: e.get("type") == "agent.opened")
 
     # Reopen from the same connection with resume=true — no takeover.
     await c.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r2",
             "session_id": "self",
             "backend": "claude",
@@ -1007,10 +1007,10 @@ async def test_no_takeover_notice_for_same_connection_reopen(client_factory, fak
     )
     # The opened ack arrives; no session_taken in between.
     collected = await c.wait_for(
-        lambda e: e.get("id") == "r2" and e.get("type") == "blemeesd.opened",
+        lambda e: e.get("id") == "r2" and e.get("type") == "agent.opened",
         collect=True,
     )
-    assert not any(e.get("type") == "blemeesd.session_taken" for e in collected)
+    assert not any(e.get("type") == "agent.session_taken" for e in collected)
 
 
 # ---------------------------------------------------------------------------
@@ -1021,11 +1021,11 @@ async def test_no_takeover_notice_for_same_connection_reopen(client_factory, fak
 async def test_status_returns_snapshot(client_factory, fake_mode):
     fake_mode("normal")
     client = await client_factory()
-    await client.send({"type": "blemeesd.status", "id": "s-1"})
-    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.status_reply")
+    await client.send({"type": "agent.status", "id": "s-1"})
+    reply = await client.wait_for(lambda e: e.get("type") == "agent.status_reply")
     assert reply["id"] == "s-1"
-    assert reply["protocol"] == "blemees/2"
-    assert reply["daemon"].startswith("blemeesd/")
+    assert reply["protocol"] == "blemees-agent/1"
+    assert reply["daemon"].startswith("blemees-agentd/")
     assert reply["pid"] > 0
     assert reply["uptime_s"] >= 0.0
     assert reply["connections"] >= 1
@@ -1045,16 +1045,16 @@ async def test_status_reflects_open_sessions(client_factory, fake_mode):
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "x",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
-    await client.send({"type": "blemeesd.status"})
-    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.status_reply")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
+    await client.send({"type": "agent.status"})
+    reply = await client.wait_for(lambda e: e.get("type") == "agent.status_reply")
     assert reply["sessions"]["total"] == 1
     assert reply["sessions"]["attached"] == 1
 
@@ -1071,17 +1071,17 @@ async def test_watch_receives_events_live(client_factory, fake_mode):
 
     await owner.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "shared",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await owner.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await owner.wait_for(lambda e: e.get("type") == "agent.opened")
 
-    await watcher.send({"type": "blemeesd.watch", "id": "w1", "session_id": "shared"})
-    ack = await watcher.wait_for(lambda e: e.get("type") == "blemeesd.watching")
+    await watcher.send({"type": "agent.watch", "id": "w1", "session_id": "shared"})
+    ack = await watcher.wait_for(lambda e: e.get("type") == "agent.watching")
     assert ack["session_id"] == "shared"
 
     # Drive a turn on the owner; the watcher should see the same event stream.
@@ -1102,14 +1102,14 @@ async def test_watch_replays_from_last_seen_seq(client_factory, fake_mode):
     owner = await client_factory()
     await owner.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "rep",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await owner.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await owner.wait_for(lambda e: e.get("type") == "agent.opened")
     await owner.send(
         {
             "type": "agent.user",
@@ -1122,13 +1122,13 @@ async def test_watch_replays_from_last_seen_seq(client_factory, fake_mode):
     watcher = await client_factory()
     await watcher.send(
         {
-            "type": "blemeesd.watch",
+            "type": "agent.watch",
             "id": "w1",
             "session_id": "rep",
             "last_seen_seq": 0,
         }
     )
-    await watcher.wait_for(lambda e: e.get("type") == "blemeesd.watching")
+    await watcher.wait_for(lambda e: e.get("type") == "agent.watching")
     # Should catch up through the replay and see the completed turn.
     await watcher.wait_for(
         lambda e: e.get("type") == "agent.result" and e.get("session_id") == "rep"
@@ -1141,19 +1141,19 @@ async def test_unwatch_stops_delivery(client_factory, fake_mode):
     watcher = await client_factory()
     await owner.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "u",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await owner.wait_for(lambda e: e.get("type") == "blemeesd.opened")
-    await watcher.send({"type": "blemeesd.watch", "id": "w1", "session_id": "u"})
-    await watcher.wait_for(lambda e: e.get("type") == "blemeesd.watching")
+    await owner.wait_for(lambda e: e.get("type") == "agent.opened")
+    await watcher.send({"type": "agent.watch", "id": "w1", "session_id": "u"})
+    await watcher.wait_for(lambda e: e.get("type") == "agent.watching")
 
-    await watcher.send({"type": "blemeesd.unwatch", "id": "u1", "session_id": "u"})
-    ack = await watcher.wait_for(lambda e: e.get("type") == "blemeesd.unwatched")
+    await watcher.send({"type": "agent.unwatch", "id": "u1", "session_id": "u"})
+    ack = await watcher.wait_for(lambda e: e.get("type") == "agent.unwatched")
     assert ack["was_watching"] is True
 
     # Now drive a turn; the watcher should NOT see agent.result.
@@ -1176,41 +1176,41 @@ async def test_unwatch_stops_delivery(client_factory, fake_mode):
 
 async def test_watch_unknown_session_errors(client_factory):
     client = await client_factory()
-    await client.send({"type": "blemeesd.watch", "id": "w1", "session_id": "ghost"})
-    err = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
+    await client.send({"type": "agent.watch", "id": "w1", "session_id": "ghost"})
+    err = await client.wait_for(lambda e: e.get("type") == "agent.error")
     assert err["code"] == "session_unknown"
 
 
 async def test_watcher_receives_session_closed_when_owner_closes(
     client_factory, fake_mode
 ):
-    """When the owner sends `blemeesd.close`, every watcher gets a
-    `blemeesd.session_closed{reason:"owner_closed"}` notification before
+    """When the owner sends `agent.close`, every watcher gets a
+    `agent.session_closed{reason:"owner_closed"}` notification before
     the session is removed."""
     fake_mode("normal")
     owner = await client_factory()
     watcher = await client_factory()
     await owner.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "closer",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await owner.wait_for(lambda e: e.get("type") == "blemeesd.opened")
-    await watcher.send({"type": "blemeesd.watch", "id": "w1", "session_id": "closer"})
-    await watcher.wait_for(lambda e: e.get("type") == "blemeesd.watching")
+    await owner.wait_for(lambda e: e.get("type") == "agent.opened")
+    await watcher.send({"type": "agent.watch", "id": "w1", "session_id": "closer"})
+    await watcher.wait_for(lambda e: e.get("type") == "agent.watching")
 
     await owner.send(
-        {"type": "blemeesd.close", "id": "c1", "session_id": "closer", "delete": False}
+        {"type": "agent.close", "id": "c1", "session_id": "closer", "delete": False}
     )
-    closed_ack = await owner.wait_for(lambda e: e.get("type") == "blemeesd.closed")
+    closed_ack = await owner.wait_for(lambda e: e.get("type") == "agent.closed")
     assert closed_ack["session_id"] == "closer"
 
     notice = await watcher.wait_for(
-        lambda e: e.get("type") == "blemeesd.session_closed"
+        lambda e: e.get("type") == "agent.session_closed"
     )
     assert notice["session_id"] == "closer"
     assert notice["reason"] == "owner_closed"
@@ -1223,25 +1223,25 @@ async def test_session_closed_not_sent_to_owner(client_factory, fake_mode):
     client = await client_factory()
     await client.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "solo",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await client.wait_for(lambda e: e.get("type") == "agent.opened")
     await client.send(
-        {"type": "blemeesd.close", "id": "c1", "session_id": "solo", "delete": False}
+        {"type": "agent.close", "id": "c1", "session_id": "solo", "delete": False}
     )
-    await client.wait_for(lambda e: e.get("type") == "blemeesd.closed")
+    await client.wait_for(lambda e: e.get("type") == "agent.closed")
 
     # Drain anything else; assert no session_closed leaked back to the owner.
     await asyncio.sleep(0.1)
     try:
         while True:
             evt = await client.recv(timeout=0.1)
-            assert evt.get("type") != "blemeesd.session_closed", evt
+            assert evt.get("type") != "agent.session_closed", evt
     except TimeoutError:
         pass
 
@@ -1253,8 +1253,8 @@ async def test_session_closed_not_sent_to_owner(client_factory, fake_mode):
 
 async def test_session_info_unknown_session_errors(client_factory):
     client = await client_factory()
-    await client.send({"type": "blemeesd.session_info", "id": "i1", "session_id": "nope"})
-    err = await client.wait_for(lambda e: e.get("type") == "blemeesd.error")
+    await client.send({"type": "agent.session_info", "id": "i1", "session_id": "nope"})
+    err = await client.wait_for(lambda e: e.get("type") == "agent.error")
     assert err["code"] == "session_unknown"
 
 
@@ -1286,8 +1286,8 @@ async def test_session_info_finds_on_disk_session(client_factory, monkeypatch, t
     monkeypatch.setattr(Path, "home", lambda: fake_home)
 
     client = await client_factory()
-    await client.send({"type": "blemeesd.session_info", "id": "i1", "session_id": sid})
-    reply = await client.wait_for(lambda e: e.get("type") == "blemeesd.session_info_reply")
+    await client.send({"type": "agent.session_info", "id": "i1", "session_id": sid})
+    reply = await client.wait_for(lambda e: e.get("type") == "agent.session_info_reply")
     assert reply["backend"] == "claude"
     assert reply["session_id"] == sid
     assert reply["native_session_id"] == sid
@@ -1306,18 +1306,18 @@ async def test_session_info_accumulates_across_turns(client_factory, fake_mode):
     c = await client_factory()
     await c.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "u",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await c.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+    await c.wait_for(lambda e: e.get("type") == "agent.opened")
 
     # Zero counters before any turn.
-    await c.send({"type": "blemeesd.session_info", "id": "i0", "session_id": "u"})
-    zero = await c.wait_for(lambda e: e.get("type") == "blemeesd.session_info_reply")
+    await c.send({"type": "agent.session_info", "id": "i0", "session_id": "u"})
+    zero = await c.wait_for(lambda e: e.get("type") == "agent.session_info_reply")
     assert zero["turns"] == 0
     assert zero["cumulative_usage"]["input_tokens"] == 0
 
@@ -1332,8 +1332,8 @@ async def test_session_info_accumulates_across_turns(client_factory, fake_mode):
         )
         await c.wait_for(lambda e: e.get("type") == "agent.result" and e.get("session_id") == "u")
 
-    await c.send({"type": "blemeesd.session_info", "id": "i1", "session_id": "u"})
-    info = await c.wait_for(lambda e: e.get("type") == "blemeesd.session_info_reply")
+    await c.send({"type": "agent.session_info", "id": "i1", "session_id": "u"})
+    info = await c.wait_for(lambda e: e.get("type") == "agent.session_info_reply")
     assert info["turns"] == 3
     assert info["cumulative_usage"]["input_tokens"] == 30
     assert info["cumulative_usage"]["output_tokens"] == 15
@@ -1386,7 +1386,7 @@ async def test_session_info_survives_daemon_restart(tmp_path, monkeypatch):
 
         await send(
             {
-                "type": "blemeesd.hello",
+                "type": "agent.hello",
                 "client": "t/0",
                 "protocol": PROTOCOL_VERSION,
             }
@@ -1406,14 +1406,14 @@ async def test_session_info_survives_daemon_restart(tmp_path, monkeypatch):
         w, send, wait_for = await _connect(sock1)
         await send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r1",
                 "session_id": "keep",
                 "backend": "claude",
                 "options": {"claude": {"tools": ""}},
             }
         )
-        await wait_for(lambda e: e.get("type") == "blemeesd.opened")
+        await wait_for(lambda e: e.get("type") == "agent.opened")
         for _ in range(2):
             await send(
                 {
@@ -1448,7 +1448,7 @@ async def test_session_info_survives_daemon_restart(tmp_path, monkeypatch):
         w, send, wait_for = await _connect(sock2)
         await send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r2",
                 "session_id": "keep",
                 "backend": "claude",
@@ -1456,9 +1456,9 @@ async def test_session_info_survives_daemon_restart(tmp_path, monkeypatch):
                 "options": {"claude": {"tools": ""}},
             }
         )
-        await wait_for(lambda e: e.get("type") == "blemeesd.opened")
-        await send({"type": "blemeesd.session_info", "id": "i1", "session_id": "keep"})
-        info = await wait_for(lambda e: e.get("type") == "blemeesd.session_info_reply")
+        await wait_for(lambda e: e.get("type") == "agent.opened")
+        await send({"type": "agent.session_info", "id": "i1", "session_id": "keep"})
+        info = await wait_for(lambda e: e.get("type") == "agent.session_info_reply")
         assert info["turns"] == 2
         assert info["cumulative_usage"]["input_tokens"] == 20
         assert info["cumulative_usage"]["output_tokens"] == 10

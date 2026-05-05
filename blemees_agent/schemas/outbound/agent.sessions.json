@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/outbound/blemeesd.sessions.json",
-  "title": "blemeesd.sessions",
-  "description": "Reply to blemeesd.list_sessions. `sessions` is sorted newest-first by `last_active_at_ms` (preferred) or `mtime_ms` (fallback). The `cwd` field is echoed only when the request supplied one.",
+  "$id": "https://blemees/schemas/outbound/agent.sessions.json",
+  "title": "agent.sessions",
+  "description": "Reply to agent.list_sessions. `sessions` is sorted newest-first by `last_active_at_ms` (preferred) or `mtime_ms` (fallback). The `cwd` field is echoed only when the request supplied one.",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.sessions" },
+    "type": { "const": "agent.sessions" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
     "cwd": {
       "type": "string",

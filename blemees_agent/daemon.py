@@ -209,8 +209,8 @@ class Connection:
             return False
         try:
             obj = parse_line(raw, max_bytes=self._config.max_line_bytes)
-            if obj.get("type") != "blemeesd.hello":
-                raise ProtocolError("first frame must be blemeesd.hello")
+            if obj.get("type") != "agent.hello":
+                raise ProtocolError("first frame must be agent.hello")
             hello = parse_hello(obj)
         except OversizeMessageError as exc:
             await self._send_error_sync(OVERSIZE_MESSAGE, exc.message)
@@ -273,27 +273,27 @@ class Connection:
             )
             return
         try:
-            if msg_type == "blemeesd.open":
+            if msg_type == "agent.open":
                 await self._handle_open(parse_open(obj))
             elif msg_type == "agent.user":
                 await self._handle_user(parse_user(obj))
-            elif msg_type == "blemeesd.interrupt":
+            elif msg_type == "agent.interrupt":
                 await self._handle_interrupt(parse_interrupt(obj))
-            elif msg_type == "blemeesd.close":
+            elif msg_type == "agent.close":
                 await self._handle_close(parse_close(obj))
-            elif msg_type == "blemeesd.list_sessions":
+            elif msg_type == "agent.list_sessions":
                 await self._handle_list_sessions(parse_list_sessions(obj))
-            elif msg_type == "blemeesd.ping":
+            elif msg_type == "agent.ping":
                 await self._handle_ping(parse_ping(obj))
-            elif msg_type == "blemeesd.status":
+            elif msg_type == "agent.status":
                 await self._handle_status(parse_status(obj))
-            elif msg_type == "blemeesd.watch":
+            elif msg_type == "agent.watch":
                 await self._handle_watch(parse_watch(obj))
-            elif msg_type == "blemeesd.unwatch":
+            elif msg_type == "agent.unwatch":
                 await self._handle_unwatch(parse_unwatch(obj))
-            elif msg_type == "blemeesd.session_info":
+            elif msg_type == "agent.session_info":
                 await self._handle_session_info(parse_session_info(obj))
-            elif msg_type == "blemeesd.hello":
+            elif msg_type == "agent.hello":
                 await self._emit_error(INVALID_MESSAGE, "duplicate hello", id=obj.get("id"))
             else:
                 await self._emit_error(
@@ -433,7 +433,7 @@ class Connection:
         # first turn produces ``session_configured``, or on resume
         # where the threadId is cached on the Session).
         opened_frame: dict[str, Any] = {
-            "type": "blemeesd.opened",
+            "type": "agent.opened",
             "id": msg.id,
             "session_id": msg.session_id,
             "backend": msg.backend,
@@ -498,19 +498,19 @@ class Connection:
             await self._emit_error(INVALID_MESSAGE, exc.message, session_id=msg.session_id)
         else:
             # Once the backend has accepted the user turn, record a
-            # daemon-derived title for ``blemeesd.list_live_sessions``.
+            # daemon-derived title for ``agent.list_live_sessions``.
             # Only the first call sets a value; subsequent turns no-op.
             sess.record_user_message(msg.message)
 
     async def _handle_interrupt(self, msg) -> None:
-        # Per spec §5.14, ``blemeesd.interrupt`` is connection-scoped to
+        # Per spec §5.14, ``agent.interrupt`` is connection-scoped to
         # the owner. A non-owner gets the same ``was_idle:true`` reply
         # the daemon would emit for an unknown session — they don't see
         # whether the session actually exists somewhere else.
         if msg.session_id not in self._owned_sessions:
             await self._emit_frame(
                 {
-                    "type": "blemeesd.interrupted",
+                    "type": "agent.interrupted",
                     "session_id": msg.session_id,
                     "was_idle": True,
                 }
@@ -520,7 +520,7 @@ class Connection:
         if sess is None or sess.backend is None:
             await self._emit_frame(
                 {
-                    "type": "blemeesd.interrupted",
+                    "type": "agent.interrupted",
                     "session_id": msg.session_id,
                     "was_idle": True,
                 }
@@ -530,7 +530,7 @@ class Connection:
         did_kill = await sess.backend.interrupt()
         await self._emit_frame(
             {
-                "type": "blemeesd.interrupted",
+                "type": "agent.interrupted",
                 "session_id": msg.session_id,
                 "was_idle": not did_kill,
             }
@@ -642,7 +642,7 @@ class Connection:
             count=len(sessions),
         )
         reply: dict[str, Any] = {
-            "type": "blemeesd.sessions",
+            "type": "agent.sessions",
             "id": msg.id,
             "sessions": sessions,
         }
@@ -651,13 +651,13 @@ class Connection:
         await self._emit_frame(reply)
 
     async def _handle_close(self, msg) -> None:
-        # Per spec §5.14, ``blemeesd.close`` is connection-scoped to the
+        # Per spec §5.14, ``agent.close`` is connection-scoped to the
         # owner. A non-owner gets the idempotent ``closed`` ack without
         # the underlying session being touched — they don't see whether
         # it exists elsewhere, and they can't kill someone else's session.
         if msg.session_id not in self._owned_sessions:
             await self._emit_frame(
-                {"type": "blemeesd.closed", "id": msg.id, "session_id": msg.session_id}
+                {"type": "agent.closed", "id": msg.id, "session_id": msg.session_id}
             )
             return
         self._log.info("session.close", session_id=msg.session_id, delete=msg.delete)
@@ -671,23 +671,23 @@ class Connection:
         if sess is not None:
             await sess.broadcast_to_watchers(
                 {
-                    "type": "blemeesd.session_closed",
+                    "type": "agent.session_closed",
                     "session_id": msg.session_id,
                     "reason": "owner_closed",
                 }
             )
         await self._sessions.remove(msg.session_id, delete_file=msg.delete)
         await self._emit_frame(
-            {"type": "blemeesd.closed", "id": msg.id, "session_id": msg.session_id}
+            {"type": "agent.closed", "id": msg.id, "session_id": msg.session_id}
         )
 
     async def _handle_ping(self, msg: PingMessage) -> None:
-        """Liveness check: reply with ``blemeesd.pong`` carrying the client's id.
+        """Liveness check: reply with ``agent.pong`` carrying the client's id.
 
         A ``data`` field on the ping is echoed back so clients can round-trip a
         correlation token without relying solely on ``id``.
         """
-        frame: dict[str, Any] = {"type": "blemeesd.pong", "id": msg.id}
+        frame: dict[str, Any] = {"type": "agent.pong", "id": msg.id}
         if msg.data is not _MISSING:
             frame["data"] = msg.data
         await self._emit_frame(frame)
@@ -701,7 +701,7 @@ class Connection:
         total connection count, daemon uptime).
         """
         snap: dict[str, Any] = self._status_snapshot() if self._status_snapshot is not None else {}
-        frame = {"type": "blemeesd.status_reply", "id": msg.id, **snap}
+        frame = {"type": "agent.status_reply", "id": msg.id, **snap}
         await self._emit_frame(frame)
 
     async def _handle_watch(self, msg) -> None:
@@ -717,7 +717,7 @@ class Connection:
             return
         await self._emit_frame(
             {
-                "type": "blemeesd.watching",
+                "type": "agent.watching",
                 "id": msg.id,
                 "session_id": msg.session_id,
                 "last_seq": sess.seq,
@@ -734,7 +734,7 @@ class Connection:
         )
 
     async def _handle_unwatch(self, msg) -> None:
-        """Unsubscribe a prior ``blemeesd.watch``. No-op if not watching."""
+        """Unsubscribe a prior ``agent.watch``. No-op if not watching."""
         sess = self._sessions.try_get(msg.session_id)
         removed = False
         if sess is not None:
@@ -742,7 +742,7 @@ class Connection:
         self._watched_sessions.discard(msg.session_id)
         await self._emit_frame(
             {
-                "type": "blemeesd.unwatched",
+                "type": "agent.unwatched",
                 "id": msg.id,
                 "session_id": msg.session_id,
                 "was_watching": removed,
@@ -769,7 +769,7 @@ class Connection:
                 attached=sess.connection_id is not None,
                 subprocess_running=subproc_running,
             )
-            frame: dict[str, Any] = {"type": "blemeesd.session_info_reply", "id": msg.id}
+            frame: dict[str, Any] = {"type": "agent.session_info_reply", "id": msg.id}
             frame.update(snap)
             await self._emit_frame(frame)
             return
@@ -784,7 +784,7 @@ class Connection:
                 session_id=msg.session_id,
             )
             return
-        frame = {"type": "blemeesd.session_info_reply", "id": msg.id}
+        frame = {"type": "agent.session_info_reply", "id": msg.id}
         frame.update(snap)
         await self._emit_frame(frame)
 
@@ -1003,7 +1003,7 @@ class Connection:
         fight the new owner over it. Events stop flowing here immediately.
         """
         self._owned_sessions.discard(session_id)
-        frame: dict[str, Any] = {"type": "blemeesd.session_taken", "session_id": session_id}
+        frame: dict[str, Any] = {"type": "agent.session_taken", "session_id": session_id}
         if by_peer_pid is not None:
             frame["by_peer_pid"] = by_peer_pid
         await self._emit_frame(frame)
@@ -1075,7 +1075,7 @@ class Daemon:
         return None
 
     def _status_snapshot(self) -> dict[str, Any]:
-        """Assemble the payload for a ``blemeesd.status_reply`` frame."""
+        """Assemble the payload for a ``agent.status_reply`` frame."""
         now = time.monotonic()
         sessions = list(self._sessions._sessions.values())
         total = len(sessions)
@@ -1085,7 +1085,7 @@ class Daemon:
         for s in sessions:
             by_backend[s.backend_name] = by_backend.get(s.backend_name, 0) + 1
         return {
-            "daemon": f"blemeesd/{__version__}",
+            "daemon": f"blemees-agentd/{__version__}",
             "protocol": PROTOCOL_VERSION,
             "pid": os.getpid(),
             "uptime_s": round(now - self._start_time, 3),

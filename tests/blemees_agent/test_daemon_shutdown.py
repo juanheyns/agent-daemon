@@ -80,7 +80,7 @@ class _Stream:
 async def _connect(path: str) -> _Stream:
     r, w = await asyncio.open_unix_connection(path)
     s = _Stream(r, w)
-    await s.send({"type": "blemeesd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION})
+    await s.send({"type": "agent.hello", "client": "t/0", "protocol": PROTOCOL_VERSION})
     await s.recv()
     return s
 
@@ -107,14 +107,14 @@ async def test_shutdown_waits_for_in_flight_turn(tmp_path, monkeypatch):
         try:
             await s.send(
                 {
-                    "type": "blemeesd.open",
+                    "type": "agent.open",
                     "id": "r1",
                     "session_id": "g",
                     "backend": "claude",
                     "options": {"claude": {"tools": ""}},
                 }
             )
-            await s.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+            await s.wait_for(lambda e: e.get("type") == "agent.opened")
             await s.send(
                 {
                     "type": "agent.user",
@@ -155,14 +155,14 @@ async def test_shutdown_force_kills_when_grace_expires(tmp_path, monkeypatch):
         try:
             await s.send(
                 {
-                    "type": "blemeesd.open",
+                    "type": "agent.open",
                     "id": "r1",
                     "session_id": "slow",
                     "backend": "claude",
                     "options": {"claude": {"tools": ""}},
                 }
             )
-            await s.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+            await s.wait_for(lambda e: e.get("type") == "agent.opened")
             await s.send(
                 {
                     "type": "agent.user",
@@ -200,14 +200,14 @@ async def test_shutdown_grace_zero_kills_immediately(tmp_path, monkeypatch):
         try:
             await s.send(
                 {
-                    "type": "blemeesd.open",
+                    "type": "agent.open",
                     "id": "r1",
                     "session_id": "z",
                     "backend": "claude",
                     "options": {"claude": {"tools": ""}},
                 }
             )
-            await s.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+            await s.wait_for(lambda e: e.get("type") == "agent.opened")
             await s.send(
                 {
                     "type": "agent.user",
@@ -244,14 +244,14 @@ async def test_shutdown_skips_wait_for_idle_sessions(tmp_path, monkeypatch):
         try:
             await s.send(
                 {
-                    "type": "blemeesd.open",
+                    "type": "agent.open",
                     "id": "r1",
                     "session_id": "idle",
                     "backend": "claude",
                     "options": {"claude": {"tools": ""}},
                 }
             )
-            await s.wait_for(lambda e: e.get("type") == "blemeesd.opened")
+            await s.wait_for(lambda e: e.get("type") == "agent.opened")
             # No user turn sent; session is idle.
             t0 = time.monotonic()
             daemon.request_shutdown()

@@ -43,8 +43,8 @@ def encode(obj: dict[str, Any]) -> bytes:
 
 def hello_ack(daemon_version: str, pid: int, backends: dict[str, str]) -> dict[str, Any]:
     return {
-        "type": "blemeesd.hello_ack",
-        "daemon": f"blemeesd/{daemon_version}",
+        "type": "agent.hello_ack",
+        "daemon": f"blemees-agentd/{daemon_version}",
         "protocol": PROTOCOL_VERSION,
         "pid": pid,
         "backends": dict(backends),
@@ -59,7 +59,7 @@ def error_frame(
     session_id: str | None = None,
     backend: str | None = None,
 ) -> dict[str, Any]:
-    frame: dict[str, Any] = {"type": "blemeesd.error", "code": code, "message": message}
+    frame: dict[str, Any] = {"type": "agent.error", "code": code, "message": message}
     if id is not None:
         frame["id"] = id
     if session_id is not None:
@@ -295,7 +295,7 @@ def parse_close(obj: dict[str, Any]) -> CloseMessage:
 
 
 def parse_list_sessions(obj: dict[str, Any]) -> ListSessionsMessage:
-    """Parse ``blemeesd.list_sessions``.
+    """Parse ``agent.list_sessions``.
 
     ``cwd`` and ``live`` are independent, fully-composable filters.
     Omitting a filter means "no filter on that axis":

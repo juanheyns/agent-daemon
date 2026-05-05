@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/outbound/blemeesd.hello_ack.json",
-  "title": "blemeesd.hello_ack",
-  "description": "Reply to a successful blemeesd.hello handshake. `backends` carries one entry per backend the daemon successfully detected at startup; backends whose binary is missing are omitted.",
+  "$id": "https://blemees/schemas/outbound/agent.hello_ack.json",
+  "title": "agent.hello_ack",
+  "description": "Reply to a successful agent.hello handshake. `backends` carries one entry per backend the daemon successfully detected at startup; backends whose binary is missing are omitted.",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.hello_ack" },
+    "type": { "const": "agent.hello_ack" },
     "daemon": { "type": "string", "description": "e.g. `blemeesd/0.1.0`" },
-    "protocol": { "const": "blemees/2" },
+    "protocol": { "const": "blemees-agent/1" },
     "pid": { "type": "integer" },
     "backends": {
       "type": "object",

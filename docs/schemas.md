@@ -8,7 +8,7 @@ permalink: /schemas/
 
 # blemees — wire-frame JSON Schemas
 
-Machine-readable contract for every frame on the `blemees/2` protocol.
+Machine-readable contract for every frame on the `blemees-agent/1` protocol.
 The prose spec is the repository root `README.md`; the unified
 `agent.*` event vocabulary is locked in
 [`docs/agent-events.md`](../../docs/agent-events.md). The schemas in
@@ -21,7 +21,7 @@ JSON anywhere:
 ```python
 from blemees.schemas import load, iter_schemas, files
 
-hello = load("inbound/blemeesd.hello.json")   # parsed dict
+hello = load("inbound/agent.hello.json")   # parsed dict
 all_frames = list(iter_schemas())             # every shipped schema
 root = files()                                # importlib.resources Traversable
 ```
@@ -32,34 +32,34 @@ root = files()                                # importlib.resources Traversable
 blemees/schemas/
   _common.json               # shared $defs (SessionId, Seq, Backend, AgentUserMessage, NormalisedUsage, …)
   inbound/                   # client → daemon frames
-    blemeesd.hello.json
-    blemeesd.open.json
-    blemeesd.interrupt.json
-    blemeesd.close.json
-    blemeesd.list_sessions.json
-    blemeesd.ping.json
-    blemeesd.status.json
-    blemeesd.watch.json
-    blemeesd.unwatch.json
-    blemeesd.session_info.json
-    options.claude.json      # per-backend options consumed by blemeesd.open
+    agent.hello.json
+    agent.open.json
+    agent.interrupt.json
+    agent.close.json
+    agent.list_sessions.json
+    agent.ping.json
+    agent.status.json
+    agent.watch.json
+    agent.unwatch.json
+    agent.session_info.json
+    options.claude.json      # per-backend options consumed by agent.open
     options.codex.json
     agent.user.json          # client user-turn (backend-neutral)
   outbound/                  # daemon → client frames
-    blemeesd.hello_ack.json
-    blemeesd.opened.json
-    blemeesd.closed.json
-    blemeesd.interrupted.json
-    blemeesd.error.json
-    blemeesd.stderr.json
-    blemeesd.replay_gap.json
-    blemeesd.sessions.json
-    blemeesd.session_taken.json
-    blemeesd.pong.json
-    blemeesd.status_reply.json
-    blemeesd.watching.json
-    blemeesd.unwatched.json
-    blemeesd.session_info_reply.json
+    agent.hello_ack.json
+    agent.opened.json
+    agent.closed.json
+    agent.interrupted.json
+    agent.error.json
+    agent.stderr.json
+    agent.replay_gap.json
+    agent.sessions.json
+    agent.session_taken.json
+    agent.pong.json
+    agent.status_reply.json
+    agent.watching.json
+    agent.unwatched.json
+    agent.session_info_reply.json
     agent.event.json         # unified envelope for every translated agent.* event
 ```
 
@@ -114,7 +114,7 @@ If you need on-disk paths (for tooling that does not understand
 from importlib.resources import as_file
 from blemees.schemas import files
 
-with as_file(files() / "inbound" / "blemeesd.hello.json") as p:
+with as_file(files() / "inbound" / "agent.hello.json") as p:
     print(p)   # real filesystem path you can hand to a generator
 ```
 
@@ -124,8 +124,8 @@ these schemas into typed models in most languages.
 ## Versioning
 
 Breaking changes to any frame shape bump the protocol version
-(`blemees/2` → `blemees/3`); the daemon rejects old versions on
-`blemeesd.hello` with `code: protocol_mismatch`. Additive,
+(`blemees-agent/1` → `blemees-agent/2`); the daemon rejects old versions on
+`agent.hello` with `code: protocol_mismatch`. Additive,
 backward-compatible changes stay on the same version. The daemon
 supports a single protocol version at a time — pre-1.0 has no
-compatibility shim for `blemees/1`.
+compatibility shims for predecessor protocol identifiers.

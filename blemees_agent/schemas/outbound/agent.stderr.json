@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/outbound/blemeesd.stderr.json",
-  "title": "blemeesd.stderr",
+  "$id": "https://blemees/schemas/outbound/agent.stderr.json",
+  "title": "agent.stderr",
   "description": "Single line from the subprocess's stderr, forwarded for visibility. Rate-limited (default 50 lines / 10 s per session; excess dropped silently).",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.stderr" },
+    "type": { "const": "agent.stderr" },
     "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "line": { "type": "string" },
     "seq": { "$ref": "https://blemees/schemas/_common.json#/$defs/Seq" }

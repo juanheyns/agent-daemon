@@ -16,7 +16,7 @@ Responsibilities:
       and synthesise `agent.result` from the JSON-RPC response.
     * Cancel an in-flight turn via `notifications/cancelled`.
     * Detect auth-related JSON-RPC errors and surface as
-      `blemeesd.error{auth_failed}`.
+      `agent.error{auth_failed}`.
 """
 
 from __future__ import annotations
@@ -606,7 +606,7 @@ class CodexBackend:
         self._auth_emitted = True
         await self._on_event(
             {
-                "type": "blemeesd.error",
+                "type": "agent.error",
                 "session_id": self.session_id,
                 "backend": self.backend,
                 "code": AUTH_FAILED,
@@ -639,7 +639,7 @@ class CodexBackend:
                 self._auth_emitted = True
                 await self._on_event(
                     {
-                        "type": "blemeesd.error",
+                        "type": "agent.error",
                         "session_id": self.session_id,
                         "backend": self.backend,
                         "code": AUTH_FAILED,
@@ -651,7 +651,7 @@ class CodexBackend:
             if self._stderr_limit.allow():
                 await self._on_event(
                     {
-                        "type": "blemeesd.stderr",
+                        "type": "agent.stderr",
                         "session_id": self.session_id,
                         "line": line,
                     }
@@ -668,7 +668,7 @@ class CodexBackend:
             crash_msg = f"stderr tail: {tail}"[:2048]
             await self._on_event(
                 {
-                    "type": "blemeesd.error",
+                    "type": "agent.error",
                     "session_id": self.session_id,
                     "backend": self.backend,
                     "code": BACKEND_CRASHED,

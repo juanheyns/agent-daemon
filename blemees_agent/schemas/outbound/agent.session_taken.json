@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/outbound/blemeesd.session_taken.json",
-  "title": "blemeesd.session_taken",
+  "$id": "https://blemees/schemas/outbound/agent.session_taken.json",
+  "title": "agent.session_taken",
   "description": "Sent to a connection whose session just got taken over by another connection's `open {resume:true}`. After this frame, events for this session stop flowing to this connection; other sessions on the same connection are unaffected.",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.session_taken" },
+    "type": { "const": "agent.session_taken" },
     "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "by_peer_pid": { "$ref": "https://blemees/schemas/_common.json#/$defs/PeerPid" }
   },

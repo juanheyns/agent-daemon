@@ -113,7 +113,7 @@ embeds year/month/day/timestamp/threadId:
 ```
 
 The blemees daemon enumerates these files when a client asks
-`blemeesd.list_sessions{cwd: "/work/repo"}` so the user can pick a
+`agent.list_sessions{cwd: "/work/repo"}` so the user can pick a
 prior session to resume. The daemon doesn't write rollouts itself —
 Codex does that natively.
 
@@ -302,7 +302,7 @@ Three pieces, ranked by effort:
      Reload-on-reopen needs to read across rotations, which
      complicates the Phase 1 ring-seeding code.
    - Reject new writes once a file hits a hard cap (e.g. 200 MB) and
-     surface as `blemeesd.error{code:"log_full"}`. Less work, more
+     surface as `agent.error{code:"log_full"}`. Less work, more
      user-visible.
 
 ### A cheap holding action

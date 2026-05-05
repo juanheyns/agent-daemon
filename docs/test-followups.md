@@ -33,7 +33,7 @@ on-disk transcript ends up under pytest's tmp dir.
 Ring buffer default is 1024 frames per session
 (`BLEMEES_AGENTD_RING_BUFFER_SIZE`). When a reattach asks for `last_seen_seq`
 that's older than the oldest buffered frame, the daemon emits
-`blemeesd.replay_gap{since_seq, first_available_seq}` once before live
+`agent.replay_gap{since_seq, first_available_seq}` once before live
 delivery (spec §5.11).
 
 **What to verify:**
@@ -74,7 +74,7 @@ minutes for `tools/call` to settle) is the interesting case.
 
 **What to verify:**
 - Open a session, send `agent.user`, send SIGTERM to the daemon mid-turn.
-- Daemon emits `blemeesd.error{code:daemon_shutdown}` to live
+- Daemon emits `agent.error{code:daemon_shutdown}` to live
   connections.
 - The in-flight turn is allowed to complete; the durable event log
   (if enabled) gets the final `agent.result`.
@@ -92,7 +92,7 @@ teardown) and verify the same wire behavior.
 ### 5. `backend_crashed` mid-turn
 
 Spec §9.1: EOF on the child's stdio (or non-zero exit during a turn)
-surfaces as `blemeesd.error{code:backend_crashed, message:"stderr
+surfaces as `agent.error{code:backend_crashed, message:"stderr
 tail: …"}`. Mock-tested via `fake_claude.py crash` mode. Real-backend
 version requires injecting a kill on the subprocess.
 
@@ -100,7 +100,7 @@ version requires injecting a kill on the subprocess.
 - Open a session with claude, start a long turn.
 - Reach into the daemon via the test's `Daemon` instance to find the
   session's `backend.proc.pid`, then `os.kill(pid, signal.SIGKILL)`.
-- Expect `blemeesd.error{code:backend_crashed}` plus a session that
+- Expect `agent.error{code:backend_crashed}` plus a session that
   respawns transparently on the next `agent.user` (spec §9.1).
 
 **Risk:** brittle to internal API changes (poking at `daemon._sessions`
@@ -115,7 +115,7 @@ errors with auth-related codes.
 
 **Approach (claude):** Run with a dummy `BLEMEES_AGENTD_CLAUDE` script that
 prints "401: Unauthorized" to stderr and exits non-zero. Daemon
-should emit `blemeesd.error{code:auth_failed, message:"Run \`claude
+should emit `agent.error{code:auth_failed, message:"Run \`claude
 auth\` …"}` and not retry.
 
 **Approach (codex):** Similar — a fake binary that returns a JSON-RPC
@@ -131,7 +131,7 @@ mode; pull it through into a real-style e2e).
 
 Spec §9.3: per-connection event queue is bounded (1024). When full
 and not drained for `_SLOW_CONSUMER_TIMEOUT_S` (default 30 s), the
-daemon emits `blemeesd.error{code:slow_consumer}` and force-closes
+daemon emits `agent.error{code:slow_consumer}` and force-closes
 the connection.
 
 **Approach:**
@@ -147,7 +147,7 @@ the connection.
 ### 8. `oversize_message`
 
 Spec §5.1 / §9.x: line >`max_line_bytes` (default 16 MiB) → close
-connection with `blemeesd.error{code:oversize_message}`.
+connection with `agent.error{code:oversize_message}`.
 
 **Approach:** Open a connection, send a single `agent.user` frame
 with `content` ≥ 17 MiB.

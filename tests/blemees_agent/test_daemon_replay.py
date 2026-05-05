@@ -110,9 +110,9 @@ class _Stream:
 async def _connect(socket_path: str) -> _Stream:
     reader, writer = await asyncio.open_unix_connection(socket_path)
     s = _Stream(reader, writer)
-    await s.send({"type": "blemeesd.hello", "client": "t/0", "protocol": PROTOCOL_VERSION})
+    await s.send({"type": "agent.hello", "client": "t/0", "protocol": PROTOCOL_VERSION})
     ack = await s.recv()
-    assert ack["type"] == "blemeesd.hello_ack"
+    assert ack["type"] == "agent.hello_ack"
     return s
 
 
@@ -127,14 +127,14 @@ async def test_outbound_events_carry_monotonic_seq(custom_daemon):
     try:
         await s.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r1",
                 "session_id": "s1",
                 "backend": "claude",
                 "options": {"claude": {"tools": ""}},
             }
         )
-        opened = await s.wait_for(lambda e: e["type"] == "blemeesd.opened")
+        opened = await s.wait_for(lambda e: e["type"] == "agent.opened")
         assert opened["last_seq"] == 0
         await s.send(
             {
@@ -175,14 +175,14 @@ async def test_reconnect_replays_from_last_seen_seq(custom_daemon):
     s1 = await _connect(cfg.socket_path)
     await s1.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "rep",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
+    await s1.wait_for(lambda e: e["type"] == "agent.opened")
     await s1.send(
         {"type": "agent.user", "session_id": "rep", "message": {"role": "user", "content": "hi"}}
     )
@@ -202,7 +202,7 @@ async def test_reconnect_replays_from_last_seen_seq(custom_daemon):
     try:
         await s2.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r2",
                 "session_id": "rep",
                 "backend": "claude",
@@ -211,7 +211,7 @@ async def test_reconnect_replays_from_last_seen_seq(custom_daemon):
                 "last_seen_seq": mid_seq,
             }
         )
-        opened = await s2.wait_for(lambda e: e["type"] == "blemeesd.opened")
+        opened = await s2.wait_for(lambda e: e["type"] == "agent.opened")
         assert opened["last_seq"] >= last_seq
         replayed: list[int] = []
         # Consume until we catch up (no more frames within 0.3s).
@@ -241,14 +241,14 @@ async def test_reconnect_emits_replay_gap_when_buffer_rolled_over(custom_daemon)
     s1 = await _connect(cfg.socket_path)
     await s1.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "gap",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
+    await s1.wait_for(lambda e: e["type"] == "agent.opened")
     await s1.send(
         {"type": "agent.user", "session_id": "gap", "message": {"role": "user", "content": "hi"}}
     )
@@ -260,7 +260,7 @@ async def test_reconnect_emits_replay_gap_when_buffer_rolled_over(custom_daemon)
     try:
         await s2.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r2",
                 "session_id": "gap",
                 "backend": "claude",
@@ -269,8 +269,8 @@ async def test_reconnect_emits_replay_gap_when_buffer_rolled_over(custom_daemon)
                 "last_seen_seq": 1,
             }
         )
-        await s2.wait_for(lambda e: e["type"] == "blemeesd.opened")
-        gap = await s2.wait_for(lambda e: e.get("type") == "blemeesd.replay_gap")
+        await s2.wait_for(lambda e: e["type"] == "agent.opened")
+        gap = await s2.wait_for(lambda e: e.get("type") == "agent.replay_gap")
         assert gap["since_seq"] == 1
         assert gap["first_available_seq"] > 2
     finally:
@@ -294,14 +294,14 @@ async def test_mid_turn_disconnect_preserves_events_for_replay(custom_daemon):
     s1 = await _connect(cfg.socket_path)
     await s1.send(
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": "r1",
             "session_id": "mid",
             "backend": "claude",
             "options": {"claude": {"tools": ""}},
         }
     )
-    await s1.wait_for(lambda e: e["type"] == "blemeesd.opened")
+    await s1.wait_for(lambda e: e["type"] == "agent.opened")
     await s1.send(
         {"type": "agent.user", "session_id": "mid", "message": {"role": "user", "content": "hi"}}
     )
@@ -318,7 +318,7 @@ async def test_mid_turn_disconnect_preserves_events_for_replay(custom_daemon):
     try:
         await s2.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r2",
                 "session_id": "mid",
                 "backend": "claude",
@@ -327,7 +327,7 @@ async def test_mid_turn_disconnect_preserves_events_for_replay(custom_daemon):
                 "last_seen_seq": 0,
             }
         )
-        await s2.wait_for(lambda e: e["type"] == "blemeesd.opened")
+        await s2.wait_for(lambda e: e["type"] == "agent.opened")
         saw_result = False
         while True:
             try:
@@ -361,14 +361,14 @@ async def test_event_log_survives_restart(tmp_path, monkeypatch):
         s = await _connect(cfg.socket_path)
         await s.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r1",
                 "session_id": "dur",
                 "backend": "claude",
                 "options": {"claude": {"tools": ""}},
             }
         )
-        await s.wait_for(lambda e: e["type"] == "blemeesd.opened")
+        await s.wait_for(lambda e: e["type"] == "agent.opened")
         await s.send(
             {
                 "type": "agent.user",
@@ -401,7 +401,7 @@ async def test_event_log_survives_restart(tmp_path, monkeypatch):
         s = await _connect(cfg2.socket_path)
         await s.send(
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "r1",
                 "session_id": "dur",
                 "backend": "claude",
@@ -410,7 +410,7 @@ async def test_event_log_survives_restart(tmp_path, monkeypatch):
                 "last_seen_seq": 0,
             }
         )
-        opened = await s.wait_for(lambda e: e["type"] == "blemeesd.opened")
+        opened = await s.wait_for(lambda e: e["type"] == "agent.opened")
         # last_seq reflects the prior daemon's seq.
         assert opened["last_seq"] >= max(seqs)
         replayed = 0

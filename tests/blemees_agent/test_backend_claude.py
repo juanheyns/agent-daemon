@@ -400,7 +400,7 @@ async def test_crash_mid_turn_synthesises_agent_result(monkeypatch):
         saw_synth_result = False
         for _ in range(40):
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
-            if evt.get("type") == "blemeesd.error" and evt.get("code") == "backend_crashed":
+            if evt.get("type") == "agent.error" and evt.get("code") == "backend_crashed":
                 saw_error_frame = True
             if evt.get("type") == "agent.result" and evt.get("subtype") == "error":
                 saw_synth_result = True
@@ -409,7 +409,7 @@ async def test_crash_mid_turn_synthesises_agent_result(monkeypatch):
                 assert evt["error"]["code"] == "backend_crashed"
                 assert "stderr tail" in evt["error"]["message"]
                 break
-        assert saw_error_frame, "blemeesd.error{backend_crashed} not emitted"
+        assert saw_error_frame, "agent.error{backend_crashed} not emitted"
         assert saw_synth_result, "synth agent.result{error} not emitted"
     finally:
         await proc.close()
@@ -442,7 +442,7 @@ async def test_auth_failure_mid_turn_synthesises_agent_result(monkeypatch):
                     saw_synth = True
                     assert isinstance(evt.get("turn_id"), str)
                     break
-        assert saw_auth, "blemeesd.error{auth_failed} not emitted"
+        assert saw_auth, "agent.error{auth_failed} not emitted"
         assert saw_synth, "synth agent.result{error} for auth not emitted"
     finally:
         await proc.close()
@@ -577,7 +577,7 @@ async def test_crash_surfaces_backend_crashed(monkeypatch):
         saw_error = False
         for _ in range(20):
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
-            if evt.get("type") == "blemeesd.error" and evt.get("code") == "backend_crashed":
+            if evt.get("type") == "agent.error" and evt.get("code") == "backend_crashed":
                 saw_error = True
                 break
         assert saw_error, "never saw backend_crashed"

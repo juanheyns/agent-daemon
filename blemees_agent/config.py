@@ -15,6 +15,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+
 def _config_dir() -> Path:
     xdg = os.environ.get("XDG_CONFIG_HOME")
     base = Path(xdg) if xdg else Path.home() / ".config"

@@ -72,14 +72,14 @@ class Session:
         )
 
     async def interrupt(self) -> None:
-        await self._client._send({"type": "blemeesd.interrupt", "session_id": self.session_id})
+        await self._client._send({"type": "agent.interrupt", "session_id": self.session_id})
 
     async def close(self, *, delete: bool = False) -> None:
         if self._closed:
             return
         self._closed = True
         await self._client._send(
-            {"type": "blemeesd.close", "session_id": self.session_id, "delete": delete}
+            {"type": "agent.close", "session_id": self.session_id, "delete": delete}
         )
 
     async def events(self) -> AsyncIterator[dict[str, Any]]:
@@ -117,13 +117,13 @@ class BlemeesClient:
         client = cls(reader, writer)
         await client._send(
             {
-                "type": "blemeesd.hello",
+                "type": "agent.hello",
                 "client": "blemees-reference/0.1",
                 "protocol": PROTOCOL_VERSION,
             }
         )
         ack = await client._read_one()
-        if ack.get("type") != "blemeesd.hello_ack":
+        if ack.get("type") != "agent.hello_ack":
             raise BlemeesClientError(ack.get("code", "protocol"), ack.get("message", str(ack)))
         client.daemon_info = ack
         client._reader_task = asyncio.create_task(client._reader_loop())
@@ -146,9 +146,9 @@ class BlemeesClient:
         req_id = f"req_{self._next_req}"
         fut: asyncio.Future = asyncio.get_running_loop().create_future()
         self._pending[req_id] = fut
-        await self._send({"type": "blemeesd.list_sessions", "id": req_id, "cwd": cwd})
+        await self._send({"type": "agent.list_sessions", "id": req_id, "cwd": cwd})
         reply = await fut
-        if reply.get("type") == "blemeesd.error":
+        if reply.get("type") == "agent.error":
             raise BlemeesClientError(reply.get("code", ""), reply.get("message", ""))
         return list(reply.get("sessions", []))
 
@@ -169,7 +169,7 @@ class BlemeesClient:
         sess = Session(self, session_id)
         self._sessions[session_id] = sess
         frame: dict[str, Any] = {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": req_id,
             "session_id": session_id,
             "backend": backend,
@@ -181,7 +181,7 @@ class BlemeesClient:
             frame["last_seen_seq"] = last_seen_seq
         await self._send(frame)
         reply = await fut
-        if reply.get("type") == "blemeesd.error":
+        if reply.get("type") == "agent.error":
             self._sessions.pop(session_id, None)
             raise BlemeesClientError(reply.get("code", ""), reply.get("message", ""))
         try:
@@ -224,10 +224,10 @@ class BlemeesClient:
                     req_id
                     and msg_type
                     in {
-                        "blemeesd.opened",
-                        "blemeesd.closed",
-                        "blemeesd.sessions",
-                        "blemeesd.error",
+                        "agent.opened",
+                        "agent.closed",
+                        "agent.sessions",
+                        "agent.error",
                     }
                     and req_id in self._pending
                 ):

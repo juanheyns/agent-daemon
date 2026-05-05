@@ -5,7 +5,7 @@ connection that currently owns it (if any), and the original :class:`OpenMessage
 so we can respawn with ``--resume`` after an interrupt or reattach.
 
 Sessions outlive client connections. When a client disconnects without
-calling ``blemeesd.close``, the session is *detached*: if a turn is in
+calling ``agent.close``, the session is *detached*: if a turn is in
 flight the subprocess is allowed to run to the next ``result`` event (so
 the transcript closes cleanly), otherwise it is terminated immediately.
 Either way, the session record is kept so another connection can
@@ -51,13 +51,13 @@ class Session:
     # Equal to ``session_id`` for the Claude backend; the Codex
     # ``threadId`` for Codex (only known after the first turn produces
     # ``session_configured``). Used by:
-    #   * ``blemeesd.opened.native_session_id`` (omitted until known).
+    #   * ``agent.opened.native_session_id`` (omitted until known).
     #   * ``CodexBackend`` on resume so the first ``tools/call`` routes
     #     through ``codex-reply`` with the cached id.
     native_session_id: str | None = None
     # Rollout transcript path Codex writes to (carried on
     # ``agent.system_init.capabilities.rollout_path``). Cached so
-    # ``blemeesd.close{delete:true}`` can unlink it without re-scanning
+    # ``agent.close{delete:true}`` can unlink it without re-scanning
     # the rollout directory.
     rollout_path: str | None = None
 
@@ -69,8 +69,8 @@ class Session:
     _finishing: bool = False  # subprocess keeps running, kill on next result
 
     # Non-driving subscribers: connection_id → writer. Watchers receive every
-    # frame the primary writer gets (agent.* events, blemeesd.stderr,
-    # blemeesd.error{backend_crashed,auth_failed}, and replays on subscribe)
+    # frame the primary writer gets (agent.* events, agent.stderr,
+    # agent.error{backend_crashed,auth_failed}, and replays on subscribe)
     # but cannot drive the session (user/interrupt/close).
     _watchers: dict[int, WriterFn] = field(default_factory=dict)
 
@@ -92,7 +92,7 @@ class Session:
     _usage_path: Path | None = None
 
     # Wall-clock when the session was first registered; surfaced on
-    # `blemeesd.live_sessions` so clients can sort by age. Set on
+    # `agent.live_sessions` so clients can sort by age. Set on
     # ``SessionTable.new_session``.
     started_at_ms: int | None = None
     # Daemon-derived title from the first observed user message, capped
@@ -190,7 +190,7 @@ class Session:
             self.seq += 1
             await writer(
                 {
-                    "type": "blemeesd.replay_gap",
+                    "type": "agent.replay_gap",
                     "session_id": self.session_id,
                     "since_seq": last_seen_seq,
                     "first_available_seq": earliest,
@@ -205,7 +205,7 @@ class Session:
             self.seq += 1
             await writer(
                 {
-                    "type": "blemeesd.replay_gap",
+                    "type": "agent.replay_gap",
                     "session_id": self.session_id,
                     "since_seq": last_seen_seq,
                     "first_available_seq": self.seq + 1,
@@ -253,7 +253,7 @@ class Session:
             self.seq += 1
             await writer(
                 {
-                    "type": "blemeesd.replay_gap",
+                    "type": "agent.replay_gap",
                     "session_id": self.session_id,
                     "since_seq": last_seen_seq,
                     "first_available_seq": earliest,
@@ -273,7 +273,7 @@ class Session:
 
         Unlike :meth:`on_event`, the frame is **not** seq-tagged, **not**
         appended to the ring, and **not** persisted. It is purely a
-        connection-level signal (e.g. ``blemeesd.session_closed``). Dead
+        connection-level signal (e.g. ``agent.session_closed``). Dead
         writers are silently dropped, matching the fan-out policy in
         ``on_event``.
         """
@@ -328,11 +328,11 @@ class Session:
         self.title = compact
 
     # ------------------------------------------------------------------
-    # Live summary (for blemeesd.list_live_sessions)
+    # Live summary (for agent.list_live_sessions)
     # ------------------------------------------------------------------
 
     def live_summary(self, *, owner_pid: int | None) -> dict[str, Any]:
-        """Build one row for a ``blemeesd.live_sessions`` reply.
+        """Build one row for a ``agent.live_sessions`` reply.
 
         Optional fields (``cwd``, ``model``, ``title``, ``owner_pid``,
         ``last_active_at_ms``) are omitted entirely when not known —
@@ -435,7 +435,7 @@ class Session:
         self._save_usage_sidecar()
 
     def usage_snapshot(self, *, attached: bool, subprocess_running: bool) -> dict:
-        """Build the payload for a ``blemeesd.session_info_reply`` frame."""
+        """Build the payload for a ``agent.session_info_reply`` frame."""
         last_inputs = (
             int(self.last_turn_usage.get("input_tokens", 0) or 0)
             + int(self.last_turn_usage.get("cache_read_input_tokens", 0) or 0)
@@ -455,7 +455,7 @@ class Session:
             "attached": attached,
             "subprocess_running": subprocess_running,
             # Highest seq the session has produced to date — mirrors the
-            # ``last_seq`` field on ``blemeesd.opened`` / ``blemeesd.watching``.
+            # ``last_seq`` field on ``agent.opened`` / ``agent.watching``.
             "last_seq": self.seq,
         }
 

@@ -75,21 +75,21 @@ def h() -> RecordingHarness:
 
 async def test_hello_command(h):
     assert await dispatch(h, "hello") is True
-    assert h.sent[-1]["type"] == "blemeesd.hello"
+    assert h.sent[-1]["type"] == "agent.hello"
     assert h.sent[-1]["protocol"]
 
 
 async def test_ping_status_emit_request_id(h):
     await dispatch(h, "ping")
     await dispatch(h, "status")
-    assert h.sent[0]["type"] == "blemeesd.ping" and h.sent[0]["id"].startswith("req_")
-    assert h.sent[1]["type"] == "blemeesd.status" and h.sent[1]["id"].startswith("req_")
+    assert h.sent[0]["type"] == "agent.ping" and h.sent[0]["id"].startswith("req_")
+    assert h.sent[1]["type"] == "agent.status" and h.sent[1]["id"].startswith("req_")
 
 
 async def test_open_with_kv_fields(h):
     await dispatch(h, "open my-session model=sonnet permission_mode=bypassPermissions")
     f = h.sent[-1]
-    assert f["type"] == "blemeesd.open"
+    assert f["type"] == "agent.open"
     assert f["session_id"] == "my-session"
     assert f["backend"] == "claude"
     assert f["options"]["claude"]["model"] == "sonnet"
@@ -106,7 +106,7 @@ async def test_open_with_explicit_backend(h):
 
 async def test_open_new_generates_uuid_and_notes_it(h):
     await dispatch(h, "open new")
-    assert h.sent[-1]["type"] == "blemeesd.open"
+    assert h.sent[-1]["type"] == "agent.open"
     sid = h.sent[-1]["session_id"]
     assert len(sid) == 36 and sid.count("-") == 4  # uuid4 shape
     assert any(sid in note for note in h.notes)
@@ -121,7 +121,7 @@ async def test_resume_sets_resume_true(h):
 
 async def test_close_with_delete_flag(h):
     await dispatch(h, "close my-session --delete")
-    assert h.sent[-1] == {"type": "blemeesd.close", "session_id": "my-session", "delete": True}
+    assert h.sent[-1] == {"type": "agent.close", "session_id": "my-session", "delete": True}
 
 
 async def test_close_without_delete(h):
@@ -131,7 +131,7 @@ async def test_close_without_delete(h):
 
 async def test_interrupt(h):
     await dispatch(h, "interrupt my-session")
-    assert h.sent[-1] == {"type": "blemeesd.interrupt", "session_id": "my-session"}
+    assert h.sent[-1] == {"type": "agent.interrupt", "session_id": "my-session"}
 
 
 async def test_send_text_wraps_in_user_message(h):
@@ -153,8 +153,8 @@ async def test_send_json_uses_raw_message(h):
 
 
 async def test_raw_passes_through_arbitrary_json(h):
-    await dispatch(h, 'raw {"type":"blemeesd.future_verb","custom":1}')
-    assert h.sent[-1] == {"type": "blemeesd.future_verb", "custom": 1}
+    await dispatch(h, 'raw {"type":"agent.future_verb","custom":1}')
+    assert h.sent[-1] == {"type": "agent.future_verb", "custom": 1}
 
 
 async def test_raw_with_invalid_json_does_not_crash_repl(h, capsys):
@@ -193,9 +193,9 @@ async def test_blank_line_and_comment_are_noops(h):
 async def test_watch_unwatch(h):
     await dispatch(h, "watch my-session last_seen_seq=10")
     await dispatch(h, "unwatch my-session")
-    assert h.sent[0]["type"] == "blemeesd.watch"
+    assert h.sent[0]["type"] == "agent.watch"
     assert h.sent[0]["last_seen_seq"] == 10
-    assert h.sent[1]["type"] == "blemeesd.unwatch"
+    assert h.sent[1]["type"] == "agent.unwatch"
 
 
 async def test_pretty_and_quiet_toggles(h):

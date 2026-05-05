@@ -18,7 +18,7 @@ At least one of the supported agent backends must be on `$PATH`:
 * **Claude Code** — `claude` binary (override with `--claude` / `BLEMEES_AGENTD_CLAUDE`).
 * **Codex** — `codex` binary, version 0.125+ for `codex mcp-server` (override with `--codex` / `BLEMEES_AGENTD_CODEX`).
 
-The daemon picks the backend per session, on `blemeesd.open`. A daemon
+The daemon picks the backend per session, on `agent.open`. A daemon
 without `claude` on `$PATH` can still serve `backend:"codex"` sessions
 and vice versa; the missing binary surfaces as a `spawn_failed` only
 when a session that needs it is opened.
@@ -103,13 +103,13 @@ frames.
 ```
 $ blemees-agentctl
 · connected: /tmp/blemees-agentd-501.sock
-→ {"type":"blemeesd.hello","client":"blemees-agentctl/0.9.0","protocol":"blemees/2"}
-← blemeesd.hello_ack  {"daemon":"blemees-agentd/0.9.0","backends":{"claude":"2.1.118","codex":"0.125.0"},…}
+→ {"type":"agent.hello","client":"blemees-agentctl/0.9.0","protocol":"blemees/2"}
+← agent.hello_ack  {"daemon":"blemees-agentd/0.9.0","backends":{"claude":"2.1.118","codex":"0.125.0"},…}
 blemees-agentctl> status
-← blemeesd.status_reply  {"uptime_s":12.4,"connections":1,…}
+← agent.status_reply  {"uptime_s":12.4,"connections":1,…}
 blemees-agentctl> open new backend=claude options.model=sonnet options.permission_mode=bypassPermissions
 · session_id: 5a01f0d8-…
-← blemeesd.opened  …
+← agent.opened  …
 blemees-agentctl> send 5a01f0d8-… what is 2+2?
 ← agent.delta {"backend":"claude","kind":"text","text":"4"}
 ← agent.result {"backend":"claude","subtype":"success","duration_ms":…}
@@ -143,7 +143,7 @@ not filter events. It:
 4. Manages subprocess lifecycle (spawn, kill, respawn or re-attach
    per-backend).
 
-Clients pick a backend per session via `blemeesd.open.backend` and pass
+Clients pick a backend per session via `agent.open.backend` and pass
 backend-specific knobs under `options.<backend>.*`. Any session emits
 the same `agent.*` frames regardless of backend — clients can switch on
 event type without branching by backend.
@@ -304,12 +304,12 @@ event-handling code; backends only differ in what they accept under
 
 Client opens the connection and sends:
 ```json
-{"type":"blemeesd.hello","client":"your-tool/0.1","protocol":"blemees/2"}
+{"type":"agent.hello","client":"your-tool/0.1","protocol":"blemees/2"}
 ```
 Daemon replies:
 ```json
 {
-  "type":"blemeesd.hello_ack",
+  "type":"agent.hello_ack",
   "daemon":"blemees-agentd/0.1",
   "protocol":"blemees/2",
   "pid":12345,
@@ -325,11 +325,11 @@ omitted (so `{"backends":{"claude":"2.1.118"}}` is a valid ack — Codex
 is just unavailable). Detection is best-effort and never blocks
 startup.
 
-If `protocol` does not match, daemon sends `blemeesd.error` (code
+If `protocol` does not match, daemon sends `agent.error` (code
 `protocol_mismatch`) and closes.
 
 > **`blemees/2` note:** v2 introduces the unified `agent.*` namespace
-> and the `backend` / `options` shape on `blemeesd.open`. There is no
+> and the `backend` / `options` shape on `agent.open`. There is no
 > backwards-compatible alias for `blemees/1` — pre-1.0 clients must
 > migrate. See the migration notes at the bottom of §5.
 
@@ -340,7 +340,7 @@ backend-neutral; backend-specific knobs live under `options.<backend>`.
 
 ```json
 {
-  "type": "blemeesd.open",
+  "type": "agent.open",
   "id": "req_001",
   "session_id": "s_abc",
   "backend": "claude",
@@ -364,7 +364,7 @@ Or against Codex:
 
 ```json
 {
-  "type": "blemeesd.open",
+  "type": "agent.open",
   "id": "req_002",
   "session_id": "s_xyz",
   "backend": "codex",
@@ -480,7 +480,7 @@ fail with `auth_failed` (§5.10).
 Daemon reply on success:
 ```json
 {
-  "type":"blemeesd.opened",
+  "type":"agent.opened",
   "id":"req_001",
   "session_id":"s_abc",
   "backend":"claude",
@@ -501,7 +501,7 @@ and logs.
 
 On failure:
 ```json
-{"type":"blemeesd.error","id":"req_001","session_id":"s_abc","code":"spawn_failed","message":"..."}
+{"type":"agent.error","id":"req_001","session_id":"s_abc","code":"spawn_failed","message":"..."}
 ```
 
 ### 5.5 User message
@@ -581,7 +581,7 @@ under each frame's `raw` field.
 Events that arrive on the backend child's **stderr** are wrapped and
 forwarded as well (for visibility into warnings / auth errors):
 ```json
-{"session_id":"s_abc","type":"blemeesd.stderr","line":"..."}
+{"session_id":"s_abc","type":"agent.stderr","line":"..."}
 ```
 These are rate-limited to prevent a broken subprocess from flooding the
 client. Default cap: 50 lines per 10 s; excess dropped with a counter.
@@ -590,7 +590,7 @@ client. Default cap: 50 lines per 10 s; excess dropped with a counter.
 
 Client cancels the in-flight turn:
 ```json
-{"type":"blemeesd.interrupt","session_id":"s_abc"}
+{"type":"agent.interrupt","session_id":"s_abc"}
 ```
 
 Per-backend mechanism:
@@ -605,21 +605,21 @@ Per-backend mechanism:
 
 Daemon emits:
 ```json
-{"type":"blemeesd.interrupted","session_id":"s_abc"}
+{"type":"agent.interrupted","session_id":"s_abc"}
 ```
 
 Any `agent.*` events emitted before the cancel are forwarded as normal.
 Already-sent deltas are NOT retracted. The interrupted turn is closed
 with `agent.result{subtype:"interrupted"}`.
 
-Interrupt is a no-op (returns `blemeesd.interrupted` with `was_idle: true`) if
+Interrupt is a no-op (returns `agent.interrupted` with `was_idle: true`) if
 no turn is in flight.
 
 ### 5.8 Close
 
 Explicit session close:
 ```json
-{"type":"blemeesd.close","id":"req_099","session_id":"s_abc","delete":true}
+{"type":"agent.close","id":"req_099","session_id":"s_abc","delete":true}
 ```
 - `delete: true` → daemon kills the subprocess and removes its **own**
   per-session state: the durable event log
@@ -642,11 +642,11 @@ manually if you want it gone.
 
 Daemon replies:
 ```json
-{"type":"blemeesd.closed","id":"req_099","session_id":"s_abc"}
+{"type":"agent.closed","id":"req_099","session_id":"s_abc"}
 ```
 
 If the session has watchers attached (§5.14), they receive a
-`blemeesd.session_closed{session_id, reason:"owner_closed"}`
+`agent.session_closed{session_id, reason:"owner_closed"}`
 notification *before* the daemon unhooks their writers. The closer
 itself does **not** receive `session_closed` — it gets the `closed`
 ack to its own request. Owners and watchers thus get distinct,
@@ -685,7 +685,7 @@ saw. Letting the turn complete closes the transcript cleanly and makes
 mid-stream reconnects a replay problem, not a consistency problem.
 The same policy applies to Codex (we don't `notifications/cancelled`
 the in-flight call on plain disconnect — only on explicit
-`blemeesd.interrupt`).
+`agent.interrupt`).
 
 #### 5.9.1 Session takeover
 
@@ -694,7 +694,7 @@ another live connection (via `resume: true`). The daemon allows the
 takeover and notifies the previous owner *before* switching the writer:
 
 ```json
-{"type":"blemeesd.session_taken","session_id":"s_abc","by_peer_pid":12345}
+{"type":"agent.session_taken","session_id":"s_abc","by_peer_pid":12345}
 ```
 
 After this frame the previous connection stops receiving events for
@@ -714,11 +714,11 @@ available to the new owner.
 
 ### 5.10 Errors
 
-Errors are `blemeesd.error` frames with a machine-readable `code`. The daemon
+Errors are `agent.error` frames with a machine-readable `code`. The daemon
 never crashes the process on a per-session error.
 
 ```json
-{"type":"blemeesd.error","id":"req_001","session_id":"s_abc","code":"backend_crashed","message":"stderr tail: ..."}
+{"type":"agent.error","id":"req_001","session_id":"s_abc","code":"backend_crashed","message":"stderr tail: ..."}
 ```
 
 Error codes the client must handle:
@@ -728,7 +728,7 @@ Error codes the client must handle:
 | `protocol_mismatch` | Incompatible protocol version. | Yes. |
 | `invalid_message` | Malformed JSON or bad field. | No. |
 | `unknown_message` | Unknown `blemees-agentd.*` type. | No. |
-| `unknown_backend` | `blemeesd.open.backend` is not a backend the daemon knows. | No. |
+| `unknown_backend` | `agent.open.backend` is not a backend the daemon knows. | No. |
 | `unsafe_flag` | Client requested a refused flag. | No. |
 | `session_unknown` | No such session. | No. |
 | `session_exists` | Session id collides on open. | No. |
@@ -751,7 +751,7 @@ Error codes the client must handle:
 Every outbound frame the daemon emits for a session — translated
 `agent.*` events and synthetic `blemees-agentd.*` frames alike — carries a
 monotonic integer `seq`, assigned by the session and starting at 1.
-`blemeesd.opened` additionally carries `last_seq` so a reconnecting
+`agent.opened` additionally carries `last_seq` so a reconnecting
 client knows the highest seq the session has produced.
 
 Recent frames are retained in two places:
@@ -768,20 +768,20 @@ Recent frames are retained in two places:
 On reconnect, the client may request replay:
 
 ```json
-{"type":"blemeesd.open","id":"r1","session_id":"s1","resume":true,"last_seen_seq":42}
+{"type":"agent.open","id":"r1","session_id":"s1","resume":true,"last_seen_seq":42}
 ```
 
 The daemon delivers, in order:
-1. `blemeesd.opened` (with `last_seq`), then
+1. `agent.opened` (with `last_seq`), then
 2. every buffered frame with `seq > last_seen_seq`, then
 3. live frames.
 
 If the buffer has rolled over past `last_seen_seq + 1`, a one-shot
-`blemeesd.replay_gap{since_seq, first_available_seq}` frame is emitted
+`agent.replay_gap{since_seq, first_available_seq}` frame is emitted
 before the replay so the client can detect the loss:
 
 ```json
-{"type":"blemeesd.replay_gap","session_id":"s1","since_seq":42,"first_available_seq":71}
+{"type":"agent.replay_gap","session_id":"s1","since_seq":42,"first_available_seq":71}
 ```
 
 Omitting `last_seen_seq` on reattach replays whatever is currently in
@@ -792,11 +792,11 @@ skips replay and goes straight to live delivery.
 
 Client:
 ```json
-{"type":"blemeesd.ping","id":"req_1","data":"anything"}
+{"type":"agent.ping","id":"req_1","data":"anything"}
 ```
 Daemon:
 ```json
-{"type":"blemeesd.pong","id":"req_1","data":"anything"}
+{"type":"agent.pong","id":"req_1","data":"anything"}
 ```
 `data` is opaque and echoed verbatim. `id` is recommended for
 round-trip correlation. Both fields are optional.
@@ -805,12 +805,12 @@ round-trip correlation. Both fields are optional.
 
 Client:
 ```json
-{"type":"blemeesd.status","id":"req_2"}
+{"type":"agent.status","id":"req_2"}
 ```
 Daemon:
 ```json
 {
-  "type":"blemeesd.status_reply","id":"req_2",
+  "type":"agent.status_reply","id":"req_2",
   "daemon":"blemees-agentd/0.1.0","protocol":"blemees/2","pid":12345,
   "uptime_s":127.3,
   "socket_path":"/run/user/1000/blemees/agentd.sock",
@@ -836,39 +836,39 @@ that binary at startup; sessions for it will fail with `spawn_failed`.
 
 A second connection may subscribe to an existing session's event
 stream without taking ownership. The owner keeps driving the session;
-watchers receive the same `agent.*` events, `blemeesd.stderr`,
-`blemeesd.error{backend_crashed,auth_failed}`, `blemeesd.replay_gap`,
-and `blemeesd.session_closed` frames the owner does (where they apply
+watchers receive the same `agent.*` events, `agent.stderr`,
+`agent.error{backend_crashed,auth_failed}`, `agent.replay_gap`,
+and `agent.session_closed` frames the owner does (where they apply
 — `session_closed` is watcher-only), plus an optional replay on
 subscribe.
 
 Client:
 ```json
-{"type":"blemeesd.watch","id":"req_3","session_id":"s_abc","last_seen_seq":0}
+{"type":"agent.watch","id":"req_3","session_id":"s_abc","last_seen_seq":0}
 ```
 Daemon (ack, then event stream):
 ```json
-{"type":"blemeesd.watching","id":"req_3","session_id":"s_abc","last_seq":42}
+{"type":"agent.watching","id":"req_3","session_id":"s_abc","last_seq":42}
 ```
-Unknown session → `blemeesd.error{code:"session_unknown"}`. Multiple
+Unknown session → `agent.error{code:"session_unknown"}`. Multiple
 connections may watch the same session. Watchers cannot drive:
-`agent.user`, `blemeesd.interrupt`, `blemeesd.close`, and
-`blemeesd.session_taken` remain connection-scoped to the owner.
+`agent.user`, `agent.interrupt`, `agent.close`, and
+`agent.session_taken` remain connection-scoped to the owner.
 
 When the owner explicitly closes the session, every watcher receives
-`blemeesd.session_closed{session_id, reason:"owner_closed"}`
+`agent.session_closed{session_id, reason:"owner_closed"}`
 immediately before the daemon unhooks their writers — see §5.8.
 Reattaching after that point returns
-`blemeesd.error{code:"session_unknown"}`, so the close is the
+`agent.error{code:"session_unknown"}`, so the close is the
 watchers' canonical end-of-life signal.
 
 Unsubscribe:
 ```json
-{"type":"blemeesd.unwatch","id":"req_4","session_id":"s_abc"}
+{"type":"agent.unwatch","id":"req_4","session_id":"s_abc"}
 ```
 Reply:
 ```json
-{"type":"blemeesd.unwatched","id":"req_4","session_id":"s_abc","was_watching":true}
+{"type":"agent.unwatched","id":"req_4","session_id":"s_abc","was_watching":true}
 ```
 Watchers are also automatically removed when the connection closes.
 
@@ -879,12 +879,12 @@ snapshot. Side-effect-free.
 
 Client:
 ```json
-{"type":"blemeesd.session_info","id":"req_5","session_id":"s_abc"}
+{"type":"agent.session_info","id":"req_5","session_id":"s_abc"}
 ```
 Daemon:
 ```json
 {
-  "type":"blemeesd.session_info_reply","id":"req_5","session_id":"s_abc",
+  "type":"agent.session_info_reply","id":"req_5","session_id":"s_abc",
   "backend":"claude",
   "native_session_id":"s_abc",
   "model":"claude-sonnet-4-6","cwd":"/home/u/proj",
@@ -916,7 +916,7 @@ context window to gauge headroom.
 written to `<event_log_dir>/<session>.usage.json` on every turn
 (atomic rename) and reloaded on session reopen, so they survive
 daemon restarts. Without the durable log they are in-memory only and
-reset to zero on restart. `blemeesd.close {delete:true}` also
+reset to zero on restart. `agent.close {delete:true}` also
 unlinks the sidecar.
 
 ### 5.16 Session listing (`list_sessions`)
@@ -926,11 +926,11 @@ independent, fully-composable filters; **omitting a filter means "no
 filter on that axis."**
 
 ```json
-{"type":"blemeesd.list_sessions","id":"req_6"}                                   // every session, every cwd
-{"type":"blemeesd.list_sessions","id":"req_6","cwd":"/home/u/proj"}              // every session for that cwd
-{"type":"blemeesd.list_sessions","id":"req_6","live":true}                       // live only, every cwd
-{"type":"blemeesd.list_sessions","id":"req_6","live":false}                      // cold only, every cwd
-{"type":"blemeesd.list_sessions","id":"req_6","cwd":"/home/u/proj","live":true}  // live only, that cwd
+{"type":"agent.list_sessions","id":"req_6"}                                   // every session, every cwd
+{"type":"agent.list_sessions","id":"req_6","cwd":"/home/u/proj"}              // every session for that cwd
+{"type":"agent.list_sessions","id":"req_6","live":true}                       // live only, every cwd
+{"type":"agent.list_sessions","id":"req_6","live":false}                      // cold only, every cwd
+{"type":"agent.list_sessions","id":"req_6","cwd":"/home/u/proj","live":true}  // live only, that cwd
 ```
 
 | `cwd` | `live`  | Behavior                                                                                                          |
@@ -950,7 +950,7 @@ The cold-only set is precisely the disk transcripts whose
 Reply:
 ```json
 {
-  "type":"blemeesd.sessions","id":"req_6",
+  "type":"agent.sessions","id":"req_6",
   "cwd":"/home/u/proj",
   "sessions":[
     {
@@ -1034,7 +1034,7 @@ Both share the same per-session contract:
   `error{code:"session_busy"}`.
 - Backend stdout / JSON-RPC frames are translated to `agent.*` per
   §5.6 and [`docs/agent-events.md`](docs/agent-events.md).
-- Backend stderr is rate-limited and forwarded as `blemeesd.stderr`.
+- Backend stderr is rate-limited and forwarded as `agent.stderr`.
 - Auth errors detected on the backend's diagnostic output surface as
   `auth_failed`; transport-level crashes as `backend_crashed`.
 
@@ -1200,7 +1200,7 @@ an internal state DB and deleting behind its back surfaces as
 `state db returned stale rollout path …` ERROR-level stderr noise on
 subsequent codex startups. See §5.8.
 
-Date-bucketed enumeration for `blemeesd.list_sessions` walks
+Date-bucketed enumeration for `agent.list_sessions` walks
 `~/.codex/sessions/` recursively (cheap; date-pruned to
 `SESSION_RETENTION_DAYS` when discovery is enabled).
 
@@ -1261,7 +1261,7 @@ vars override. Env prefix: `BLEMEES_AGENTD_`.
 | `stderr_rate_window_s` | — | — | `10` |
 
 A backend whose binary cannot be located at startup is simply omitted
-from the `blemeesd.hello_ack.backends` map; the daemon serves whichever
+from the `agent.hello_ack.backends` map; the daemon serves whichever
 backends *are* available. Sessions for a missing backend fail with
 `spawn_failed` at open time.
 
@@ -1440,7 +1440,7 @@ Gotchas:
 On EOF on the child's primary stream (CC stdout closed, or Codex stdio
 closed before responding) or a non-zero exit during a turn:
 ```json
-{"type":"blemeesd.error","session_id":"s_abc","code":"backend_crashed","message":"<stderr tail>"}
+{"type":"agent.error","session_id":"s_abc","code":"backend_crashed","message":"<stderr tail>"}
 ```
 Session remains open. Next `agent.user` respawns the child (Claude:
 relaunches `claude -p --resume <s>`; Codex: relaunches `codex
@@ -1458,7 +1458,7 @@ Each backend has its own detection signatures:
 
 Either surfaces as:
 ```json
-{"type":"blemeesd.error","session_id":"s_abc","code":"auth_failed","backend":"claude","message":"Run `claude auth` to re-authenticate."}
+{"type":"agent.error","session_id":"s_abc","code":"auth_failed","backend":"claude","message":"Run `claude auth` to re-authenticate."}
 ```
 Do not retry automatically. Subsequent user messages repeat the error
 until the user re-auths and the daemon sees a successful spawn /
@@ -1556,7 +1556,7 @@ Coverage applies to both backends:
   `codex` vs `codex-reply` with cached `threadId`).
 - Unsafe flags (`options.claude.dangerously_skip_permissions`,
   `options.codex.config.<refused>`) are rejected at the
-  `blemeesd.open` stage.
+  `agent.open` stage.
 - `backend:"unknown"` is rejected with `unknown_backend`.
 
 ### 11.3 End-to-end tests
@@ -1591,14 +1591,14 @@ Acceptance targets on an ordinary dev machine:
 
 ### Notable changes in 0.9.0
 
-- **`blemeesd.list_sessions` filters compose** (§5.16). `cwd` is now
+- **`agent.list_sessions` filters compose** (§5.16). `cwd` is now
   optional, `live` is a new optional boolean. The reply's
   `SessionSummary` shape is extended with live-only optional fields
   (`title`, `model`, `cwd`, `started_at_ms`, `last_active_at_ms`,
   `owner_pid`, `last_seq`, `turn_active`). Clients on the original
   shape still work — every old field is still emitted, every new
   field is optional.
-- **`blemeesd.session_closed`** (§5.8, §5.14) — new outbound frame
+- **`agent.session_closed`** (§5.8, §5.14) — new outbound frame
   delivered to watchers when the owner closes a session.
 - **`blemees` console_script renamed to `blemees-agentctl`** (§0). The
   daemon wheel no longer ships a `blemees` command; that name now
@@ -1635,7 +1635,7 @@ async def stream_one_turn(backend: str, options: dict, prompt: str) -> None:
                 elif t == "agent.result":
                     print()
                     break
-                elif t == "blemeesd.error":
+                elif t == "agent.error":
                     raise RuntimeError(event["message"])
 
 async def main():

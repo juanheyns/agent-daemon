@@ -53,8 +53,8 @@ def _registry(store: dict[str, dict]) -> Registry:
 def test_blemees_schemas_load_returns_parsed_schema():
     from blemees_agent.schemas import load
 
-    s = load("inbound/blemeesd.hello.json")
-    assert s["$id"] == "https://blemees/schemas/inbound/blemeesd.hello.json"
+    s = load("inbound/agent.hello.json")
+    assert s["$id"] == "https://blemees/schemas/inbound/agent.hello.json"
     assert s["$schema"] == "https://json-schema.org/draft/2020-12/schema"
 
 
@@ -64,11 +64,11 @@ def test_blemees_schemas_iter_yields_every_inbound_and_outbound_frame():
     ids = {s["$id"] for s in iter_schemas()}
     # Spot-check a few well-known frames; the exhaustive list is in
     # blemees/schemas/README.md.
-    assert "https://blemees/schemas/inbound/blemeesd.hello.json" in ids
+    assert "https://blemees/schemas/inbound/agent.hello.json" in ids
     assert "https://blemees/schemas/inbound/agent.user.json" in ids
     assert "https://blemees/schemas/inbound/options.claude.json" in ids
     assert "https://blemees/schemas/inbound/options.codex.json" in ids
-    assert "https://blemees/schemas/outbound/blemeesd.hello_ack.json" in ids
+    assert "https://blemees/schemas/outbound/agent.hello_ack.json" in ids
     assert "https://blemees/schemas/outbound/agent.event.json" in ids
 
 
@@ -126,8 +126,8 @@ def test_inbound_hello_ok(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/inbound/blemeesd.hello.json",
-        {"type": "blemeesd.hello", "protocol": "blemees/2", "client": "test/0"},
+        "https://blemees/schemas/inbound/agent.hello.json",
+        {"type": "agent.hello", "protocol": "blemees-agent/1", "client": "test/0"},
     )
 
 
@@ -136,8 +136,8 @@ def test_inbound_hello_rejects_wrong_protocol(store_and_registry):
     _assert_invalid(
         store,
         reg,
-        "https://blemees/schemas/inbound/blemeesd.hello.json",
-        {"type": "blemeesd.hello", "protocol": "blemees/1"},
+        "https://blemees/schemas/inbound/agent.hello.json",
+        {"type": "agent.hello", "protocol": "blemees/2"},
     )
 
 
@@ -146,9 +146,9 @@ def test_inbound_open_minimal_claude(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/inbound/blemeesd.open.json",
+        "https://blemees/schemas/inbound/agent.open.json",
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "session_id": "s1",
             "backend": "claude",
             "options": {"claude": {}},
@@ -161,9 +161,9 @@ def test_inbound_open_minimal_codex(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/inbound/blemeesd.open.json",
+        "https://blemees/schemas/inbound/agent.open.json",
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "session_id": "s1",
             "backend": "codex",
             "options": {"codex": {}},
@@ -176,9 +176,9 @@ def test_inbound_open_rejects_unknown_backend(store_and_registry):
     _assert_invalid(
         store,
         reg,
-        "https://blemees/schemas/inbound/blemeesd.open.json",
+        "https://blemees/schemas/inbound/agent.open.json",
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "session_id": "s1",
             "backend": "anthropic",
             "options": {},
@@ -187,15 +187,15 @@ def test_inbound_open_rejects_unknown_backend(store_and_registry):
 
 
 def test_inbound_open_rejects_top_level_legacy_field(store_and_registry):
-    """`model` and friends used to live at the top of blemeesd.open in
-    blemees/1; in blemees/2 they belong under options.claude.*."""
+    """`model` and friends used to live at the top of agent.open in
+    legacy protocols; in blemees-agent/1 they belong under options.claude.*."""
     store, reg = store_and_registry
     _assert_invalid(
         store,
         reg,
-        "https://blemees/schemas/inbound/blemeesd.open.json",
+        "https://blemees/schemas/inbound/agent.open.json",
         {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "session_id": "s1",
             "backend": "claude",
             "options": {"claude": {}},
@@ -323,8 +323,8 @@ def test_inbound_list_sessions_empty_body_ok(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/inbound/blemeesd.list_sessions.json",
-        {"type": "blemeesd.list_sessions"},
+        "https://blemees/schemas/inbound/agent.list_sessions.json",
+        {"type": "agent.list_sessions"},
     )
 
 
@@ -333,8 +333,8 @@ def test_inbound_list_sessions_with_cwd_and_live(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/inbound/blemeesd.list_sessions.json",
-        {"type": "blemeesd.list_sessions", "cwd": "/proj", "live": True},
+        "https://blemees/schemas/inbound/agent.list_sessions.json",
+        {"type": "agent.list_sessions", "cwd": "/proj", "live": True},
     )
 
 
@@ -343,8 +343,8 @@ def test_inbound_list_sessions_rejects_non_bool_live(store_and_registry):
     _assert_invalid(
         store,
         reg,
-        "https://blemees/schemas/inbound/blemeesd.list_sessions.json",
-        {"type": "blemeesd.list_sessions", "live": "yes"},
+        "https://blemees/schemas/inbound/agent.list_sessions.json",
+        {"type": "agent.list_sessions", "live": "yes"},
     )
 
 
@@ -353,8 +353,8 @@ def test_inbound_list_sessions_rejects_empty_cwd(store_and_registry):
     _assert_invalid(
         store,
         reg,
-        "https://blemees/schemas/inbound/blemeesd.list_sessions.json",
-        {"type": "blemeesd.list_sessions", "cwd": ""},
+        "https://blemees/schemas/inbound/agent.list_sessions.json",
+        {"type": "agent.list_sessions", "cwd": ""},
     )
 
 
@@ -363,11 +363,11 @@ def test_outbound_hello_ack_ok(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.hello_ack.json",
+        "https://blemees/schemas/outbound/agent.hello_ack.json",
         {
-            "type": "blemeesd.hello_ack",
+            "type": "agent.hello_ack",
             "daemon": "blemeesd/0.1.0",
-            "protocol": "blemees/2",
+            "protocol": "blemees-agent/1",
             "pid": 12345,
             "backends": {"claude": "2.1.118", "codex": "0.125.0"},
         },
@@ -380,11 +380,11 @@ def test_outbound_hello_ack_allows_partial_backends(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.hello_ack.json",
+        "https://blemees/schemas/outbound/agent.hello_ack.json",
         {
-            "type": "blemeesd.hello_ack",
+            "type": "agent.hello_ack",
             "daemon": "blemeesd/0.1.0",
-            "protocol": "blemees/2",
+            "protocol": "blemees-agent/1",
             "pid": 12345,
             "backends": {"claude": "2.1.118"},
         },
@@ -396,9 +396,9 @@ def test_outbound_opened_carries_backend_and_last_seq(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.opened.json",
+        "https://blemees/schemas/outbound/agent.opened.json",
         {
-            "type": "blemeesd.opened",
+            "type": "agent.opened",
             "id": "r1",
             "session_id": "s1",
             "backend": "claude",
@@ -414,38 +414,38 @@ def test_outbound_error_enum(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.error.json",
-        {"type": "blemeesd.error", "code": "invalid_message", "message": "bad field"},
+        "https://blemees/schemas/outbound/agent.error.json",
+        {"type": "agent.error", "code": "invalid_message", "message": "bad field"},
     )
     _validate(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.error.json",
+        "https://blemees/schemas/outbound/agent.error.json",
         {
-            "type": "blemeesd.error",
+            "type": "agent.error",
             "code": "auth_failed",
             "backend": "codex",
             "message": "run `codex login`",
         },
     )
-    # Old codes are gone in blemees/2.
+    # Old codes are gone in blemees-agent/1.
     _assert_invalid(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.error.json",
-        {"type": "blemeesd.error", "code": "claude_crashed", "message": "x"},
+        "https://blemees/schemas/outbound/agent.error.json",
+        {"type": "agent.error", "code": "claude_crashed", "message": "x"},
     )
     _assert_invalid(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.error.json",
-        {"type": "blemeesd.error", "code": "oauth_expired", "message": "x"},
+        "https://blemees/schemas/outbound/agent.error.json",
+        {"type": "agent.error", "code": "oauth_expired", "message": "x"},
     )
     _assert_invalid(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.error.json",
-        {"type": "blemeesd.error", "code": "not_a_known_code", "message": "x"},
+        "https://blemees/schemas/outbound/agent.error.json",
+        {"type": "agent.error", "code": "not_a_known_code", "message": "x"},
     )
 
 
@@ -454,9 +454,9 @@ def test_outbound_replay_gap_shape(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.replay_gap.json",
+        "https://blemees/schemas/outbound/agent.replay_gap.json",
         {
-            "type": "blemeesd.replay_gap",
+            "type": "agent.replay_gap",
             "session_id": "s1",
             "since_seq": 42,
             "first_available_seq": 71,
@@ -469,8 +469,8 @@ def test_outbound_session_taken_ok(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.session_taken.json",
-        {"type": "blemeesd.session_taken", "session_id": "s1", "by_peer_pid": 12345},
+        "https://blemees/schemas/outbound/agent.session_taken.json",
+        {"type": "agent.session_taken", "session_id": "s1", "by_peer_pid": 12345},
     )
 
 
@@ -588,9 +588,9 @@ def test_outbound_sessions_listing_with_backend(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.sessions.json",
+        "https://blemees/schemas/outbound/agent.sessions.json",
         {
-            "type": "blemeesd.sessions",
+            "type": "agent.sessions",
             "id": "r1",
             "cwd": "/home/u/proj",
             "sessions": [
@@ -615,9 +615,9 @@ def test_outbound_sessions_live_only_omits_cwd(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.sessions.json",
+        "https://blemees/schemas/outbound/agent.sessions.json",
         {
-            "type": "blemeesd.sessions",
+            "type": "agent.sessions",
             "id": "r1",
             "sessions": [
                 {
@@ -643,8 +643,8 @@ def test_outbound_session_closed_owner_closed(store_and_registry):
     _validate(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.session_closed.json",
-        {"type": "blemeesd.session_closed", "session_id": "s1", "reason": "owner_closed"},
+        "https://blemees/schemas/outbound/agent.session_closed.json",
+        {"type": "agent.session_closed", "session_id": "s1", "reason": "owner_closed"},
     )
 
 
@@ -655,8 +655,8 @@ def test_outbound_session_closed_rejects_unknown_reason(store_and_registry):
     _assert_invalid(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.session_closed.json",
-        {"type": "blemeesd.session_closed", "session_id": "s1", "reason": "made_up"},
+        "https://blemees/schemas/outbound/agent.session_closed.json",
+        {"type": "agent.session_closed", "session_id": "s1", "reason": "made_up"},
     )
 
 
@@ -665,6 +665,6 @@ def test_outbound_session_closed_requires_reason(store_and_registry):
     _assert_invalid(
         store,
         reg,
-        "https://blemees/schemas/outbound/blemeesd.session_closed.json",
-        {"type": "blemeesd.session_closed", "session_id": "s1"},
+        "https://blemees/schemas/outbound/agent.session_closed.json",
+        {"type": "agent.session_closed", "session_id": "s1"},
     )

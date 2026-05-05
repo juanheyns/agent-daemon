@@ -41,7 +41,7 @@ class CodexTranslator:
         # Whether `agent.system_init` has been emitted for this backend.
         self._system_init_emitted: bool = False
         # Native session id surfaced on system_init (and used by the
-        # backend driver to populate `blemeesd.opened.native_session_id`).
+        # backend driver to populate `agent.opened.native_session_id`).
         self.thread_id: str | None = None
         # Buffered for `agent.result` synthesis at turn end.
         self._last_token_usage: dict[str, Any] | None = None

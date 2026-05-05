@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/inbound/blemeesd.status.json",
-  "title": "blemeesd.status",
+  "$id": "https://blemees/schemas/inbound/agent.status.json",
+  "title": "agent.status",
   "description": "Request a daemon-wide introspection snapshot. No side effects.",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.status" },
+    "type": { "const": "agent.status" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" }
   },
   "required": ["type"],

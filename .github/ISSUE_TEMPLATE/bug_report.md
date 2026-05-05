@@ -9,7 +9,7 @@ labels: bug
 <!-- Expected vs. actual. Include the wire frame or log line if relevant. -->
 
 ## Reproduce
-<!-- Minimal steps. Include `blemeesd --log-level debug` output if possible. -->
+<!-- Minimal steps. Include `blemees-agentd --log-level debug` output if possible. -->
 
 1.
 2.
@@ -19,7 +19,7 @@ labels: bug
 
 - OS and version (`uname -a` on Linux, `sw_vers` on macOS):
 - Python version (`python3 --version`):
-- `blemeesd --version`:
+- `blemees-agentd --version`:
 - `claude --version`:
 - Install method: [pip / uv / pipx / brew / source]
 - Running as: [foreground / `brew services` / systemd user / launchd LaunchAgent / LaunchDaemon / other]

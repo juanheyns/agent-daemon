@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/outbound/blemeesd.opened.json",
-  "title": "blemeesd.opened",
-  "description": "Reply to blemeesd.open on success. `last_seq` is the highest seq the session has produced at this moment — clients can compare to their `last_seen_seq` to decide if a replay is in flight. `native_session_id` is the backend's own identifier (CC `--session-id`; Codex `threadId`).",
+  "$id": "https://blemees/schemas/outbound/agent.opened.json",
+  "title": "agent.opened",
+  "description": "Reply to agent.open on success. `last_seq` is the highest seq the session has produced at this moment — clients can compare to their `last_seen_seq` to decide if a replay is in flight. `native_session_id` is the backend's own identifier (CC `--session-id`; Codex `threadId`).",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.opened" },
+    "type": { "const": "agent.opened" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
     "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "backend": { "$ref": "https://blemees/schemas/_common.json#/$defs/Backend" },

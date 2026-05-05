@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/outbound/blemeesd.error.json",
-  "title": "blemeesd.error",
+  "$id": "https://blemees/schemas/outbound/agent.error.json",
+  "title": "agent.error",
   "description": "Daemon error frame. `code` is machine-readable; `message` is for humans. Session-stream errors (backend_crashed, auth_failed) carry `seq`; handshake/dispatcher errors do not.",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.error" },
+    "type": { "const": "agent.error" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
     "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "backend": { "$ref": "https://blemees/schemas/_common.json#/$defs/Backend" },

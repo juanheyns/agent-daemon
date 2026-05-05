@@ -262,7 +262,7 @@ async def test_auth_error_emits_auth_failed(monkeypatch):
         saw_result = False
         for _ in range(20):
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
-            if evt.get("type") == "blemeesd.error" and evt.get("code") == "auth_failed":
+            if evt.get("type") == "agent.error" and evt.get("code") == "auth_failed":
                 saw_auth = True
             if evt.get("type") == "agent.result":
                 assert evt["subtype"] == "error"
@@ -275,7 +275,7 @@ async def test_auth_error_emits_auth_failed(monkeypatch):
 
 
 async def test_crash_surfaces_backend_crashed(monkeypatch):
-    """Crash mid-turn surfaces both `blemeesd.error{backend_crashed}` and
+    """Crash mid-turn surfaces both `agent.error{backend_crashed}` and
     a synthesised closing `agent.result{subtype:"error"}` so the turn
     invariant from spec §5.6 holds (mirrors the Claude backend)."""
     monkeypatch.setenv("BLEMEES_FAKE_MODE", "crash")
@@ -288,7 +288,7 @@ async def test_crash_surfaces_backend_crashed(monkeypatch):
         saw_synth_result = False
         for _ in range(40):
             evt = await asyncio.wait_for(queue.get(), timeout=5.0)
-            if evt.get("type") == "blemeesd.error" and evt.get("code") == "backend_crashed":
+            if evt.get("type") == "agent.error" and evt.get("code") == "backend_crashed":
                 saw_error = True
             if evt.get("type") == "agent.result" and evt.get("subtype") == "error":
                 saw_synth_result = True

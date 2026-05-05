@@ -10,8 +10,8 @@
   },
   "daemon": "<daemon_version>",
   "pid": "<pid>",
-  "protocol": "blemees/2",
-  "type": "blemeesd.hello_ack"
+  "protocol": "blemees-agent/1",
+  "type": "agent.hello_ack"
 }
 
 {
@@ -19,7 +19,7 @@
   "last_seq": 0,
   "session_id": "<session_id>",
   "subprocess_pid": "<pid>",
-  "type": "blemeesd.opened"
+  "type": "agent.opened"
 }
 
 {
@@ -119,5 +119,5 @@
 {
   "id": "<req_id>",
   "session_id": "<session_id>",
-  "type": "blemeesd.closed"
+  "type": "agent.closed"
 }

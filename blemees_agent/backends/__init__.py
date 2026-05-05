@@ -15,7 +15,7 @@ Backends are responsible for:
   per native event via the per-session `on_event` callback (the same
   callback `Session.on_event` consumes).
 * Cancelling an in-flight turn.
-* Locating on-disk transcripts for `blemeesd.list_sessions` and the
+* Locating on-disk transcripts for `agent.list_sessions` and the
   optional retention sweep.
 * Detecting auth failures in stderr / JSON-RPC errors so the daemon
   can surface `auth_failed`.
@@ -101,7 +101,7 @@ class AgentBackend(Protocol):
 
         Returns `True` if a kill / cancel was issued, `False` if no
         turn was in flight (the caller emits
-        `blemeesd.interrupted{was_idle:true}` and skips any respawn).
+        `agent.interrupted{was_idle:true}` and skips any respawn).
         """
         ...
 

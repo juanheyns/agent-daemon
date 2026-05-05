@@ -65,7 +65,7 @@ jobs:
           python3 - "$URL" "$SHA256" <<'PY'
           import pathlib, re, sys
           url, sha = sys.argv[1], sys.argv[2]
-          p = pathlib.Path("tap/Formula/blemees.rb")
+          p = pathlib.Path("tap/Formula/blemees-agent.rb")
           text = p.read_text()
           text, n_url = re.subn(r'url "[^"]+"', f'url "{url}"', text, count=1)
           text, n_sha = re.subn(r'sha256 "[^"]+"', f'sha256 "{sha}"', text, count=1)
@@ -88,6 +88,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/blemees.rb
-          git commit -m "Bump blemees to ${TAG}"
+          git add Formula/blemees-agent.rb
+          git commit -m "Bump blemees-agent to ${TAG}"
           git push origin HEAD:main

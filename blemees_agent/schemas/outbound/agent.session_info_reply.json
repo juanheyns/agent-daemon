@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/outbound/blemeesd.session_info_reply.json",
-  "title": "blemeesd.session_info_reply",
+  "$id": "https://blemees/schemas/outbound/agent.session_info_reply.json",
+  "title": "agent.session_info_reply",
   "description": "Snapshot of per-session counters maintained by the daemon. Fields inside last_turn_usage / cumulative_usage are accumulated from the normalised agent.result.usage block; new keys may appear as backends grow (additionalProperties: true).",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.session_info_reply" },
+    "type": { "const": "agent.session_info_reply" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
     "session_id": { "$ref": "https://blemees/schemas/_common.json#/$defs/SessionId" },
     "backend": { "$ref": "https://blemees/schemas/_common.json#/$defs/Backend" },

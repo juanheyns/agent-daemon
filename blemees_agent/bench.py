@@ -73,7 +73,7 @@ async def _first_event_latency(sess, prompt: str) -> float:
     await sess.send_user(prompt)
     async for evt in sess.events():
         t = evt.get("type")
-        if t == "blemeesd.error":
+        if t == "agent.error":
             raise RuntimeError(evt)
         if t in _FIRST_EVENT_TYPES:
             return time.monotonic() - t0

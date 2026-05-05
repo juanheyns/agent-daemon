@@ -58,24 +58,24 @@ Commands — each sends one wire frame, responses are printed as they arrive:
                                $BLEMEES_AGENTD_SOCKET / XDG / /tmp fallback)
   disconnect                   Close the socket
 
-  hello                        (Re)send blemeesd.hello
-  ping                         blemeesd.ping  (expect blemeesd.pong)
-  status                       blemeesd.status
-  sessions <cwd>               blemeesd.list_sessions cwd=<cwd>
-  session-info <id>            blemeesd.session_info session_id=<id>
+  hello                        (Re)send agent.hello
+  ping                         agent.ping  (expect agent.pong)
+  status                       agent.status
+  sessions <cwd>               agent.list_sessions cwd=<cwd>
+  session-info <id>            agent.session_info session_id=<id>
 
-  open <id|new> [k=v ...]      blemeesd.open session_id=<id> …
+  open <id|new> [k=v ...]      agent.open session_id=<id> …
                                id 'new' generates a uuid
                                backend=<name> picks the agent (claude|codex);
                                default claude. All other k=v go under
                                options.<backend>.* (use options.foo=bar to be
                                explicit). Values coerce true/false/int/json.
   resume <id> [k=v ...]        open with resume=true (shortcut)
-  close <id> [--delete]        blemeesd.close session_id=<id> delete=…
-  interrupt <id>               blemeesd.interrupt session_id=<id>
+  close <id> [--delete]        agent.close session_id=<id> delete=…
+  interrupt <id>               agent.interrupt session_id=<id>
 
-  watch <id> [last_seen_seq=N] blemeesd.watch (observer mode)
-  unwatch <id>                 blemeesd.unwatch
+  watch <id> [last_seen_seq=N] agent.watch (observer mode)
+  unwatch <id>                 agent.unwatch
 
   send <id> <text...>          agent.user with message={role,user,content:text}
   send-json <id> <json>        agent.user with message=<json>
@@ -241,24 +241,24 @@ class Harness:
     async def hello(self) -> None:
         await self._send(
             {
-                "type": "blemeesd.hello",
+                "type": "agent.hello",
                 "client": f"blemees-agentctl/{__version__}",
                 "protocol": PROTOCOL_VERSION,
             }
         )
 
     async def ping(self) -> None:
-        await self._send({"type": "blemeesd.ping", "id": _req_id()})
+        await self._send({"type": "agent.ping", "id": _req_id()})
 
     async def status(self) -> None:
-        await self._send({"type": "blemeesd.status", "id": _req_id()})
+        await self._send({"type": "agent.status", "id": _req_id()})
 
     async def list_sessions(self, cwd: str) -> None:
-        await self._send({"type": "blemeesd.list_sessions", "id": _req_id(), "cwd": cwd})
+        await self._send({"type": "agent.list_sessions", "id": _req_id(), "cwd": cwd})
 
     async def session_info(self, session_id: str) -> None:
         await self._send(
-            {"type": "blemeesd.session_info", "id": _req_id(), "session_id": session_id}
+            {"type": "agent.session_info", "id": _req_id(), "session_id": session_id}
         )
 
     async def open(self, session_id: str, fields: dict[str, Any]) -> str:
@@ -271,7 +271,7 @@ class Harness:
         resume = fields.pop("resume", False)
         last_seen_seq = fields.pop("last_seen_seq", None)
         frame: dict[str, Any] = {
-            "type": "blemeesd.open",
+            "type": "agent.open",
             "id": _req_id(),
             "session_id": session_id,
             "backend": backend,
@@ -285,14 +285,14 @@ class Harness:
         return session_id
 
     async def close_session(self, session_id: str, delete: bool) -> None:
-        await self._send({"type": "blemeesd.close", "session_id": session_id, "delete": delete})
+        await self._send({"type": "agent.close", "session_id": session_id, "delete": delete})
 
     async def interrupt(self, session_id: str) -> None:
-        await self._send({"type": "blemeesd.interrupt", "session_id": session_id})
+        await self._send({"type": "agent.interrupt", "session_id": session_id})
 
     async def watch(self, session_id: str, fields: dict[str, Any]) -> None:
         frame: dict[str, Any] = {
-            "type": "blemeesd.watch",
+            "type": "agent.watch",
             "id": _req_id(),
             "session_id": session_id,
         }
@@ -300,7 +300,7 @@ class Harness:
         await self._send(frame)
 
     async def unwatch(self, session_id: str) -> None:
-        await self._send({"type": "blemeesd.unwatch", "id": _req_id(), "session_id": session_id})
+        await self._send({"type": "agent.unwatch", "id": _req_id(), "session_id": session_id})
 
     async def send_user(self, session_id: str, text: str) -> None:
         await self._send(

@@ -52,7 +52,7 @@ def _default_socket() -> str:
         return env
     xdg = os.environ.get("XDG_RUNTIME_DIR")
     if xdg:
-        return str(Path(xdg) / "blemeesd.sock")
+        return str(Path(xdg) / "agent.sock")
     return f"/tmp/blemeesd-{os.getuid()}.sock"
 
 
@@ -83,7 +83,7 @@ async def capture(
         await _send(
             writer,
             {
-                "type": "blemeesd.hello",
+                "type": "agent.hello",
                 "client": "transcript-compare/0",
                 "protocol": "blemees/2",
             },
@@ -94,21 +94,21 @@ async def capture(
         await _send(
             writer,
             {
-                "type": "blemeesd.open",
+                "type": "agent.open",
                 "id": "open-1",
                 "session_id": session_id,
                 "backend": backend,
                 "options": {backend: options},
             },
         )
-        # Drain until the blemeesd.opened ack (or an error).
+        # Drain until the agent.opened ack (or an error).
         while True:
             evt = await _recv(reader, open_timeout)
             frames.append(evt)
             t = evt.get("type")
-            if t == "blemeesd.opened":
+            if t == "agent.opened":
                 break
-            if t == "blemeesd.error":
+            if t == "agent.error":
                 raise RuntimeError(f"open failed: {evt}")
 
         await _send(
@@ -128,7 +128,7 @@ async def capture(
         await _send(
             writer,
             {
-                "type": "blemeesd.close",
+                "type": "agent.close",
                 "id": "close-1",
                 "session_id": session_id,
                 "delete": True,
@@ -137,7 +137,7 @@ async def capture(
         while True:
             evt = await _recv(reader, open_timeout)
             frames.append(evt)
-            if evt.get("type") == "blemeesd.closed":
+            if evt.get("type") == "agent.closed":
                 break
     finally:
         try:
@@ -184,7 +184,7 @@ _FIXED_REDACTIONS: dict[str, str] = {
     "input": "<input>",
     "output": "<output>",
     "command": "<command>",
-    # `blemeesd.stderr.line` is free-form diagnostic text from the
+    # `agent.stderr.line` is free-form diagnostic text from the
     # backend child — useful at runtime, but unstable across runs
     # (timestamps, paths, PIDs) so it dominates a structural diff.
     "line": "<stderr_line>",
@@ -365,7 +365,7 @@ def main() -> None:
         "--socket",
         default=None,
         help="blemeesd socket path (default: $BLEMEESD_SOCKET / "
-        "$XDG_RUNTIME_DIR/blemeesd.sock / /tmp/blemeesd-<uid>.sock)",
+        "$XDG_RUNTIME_DIR/agent.sock / /tmp/blemeesd-<uid>.sock)",
     )
     parser.add_argument(
         "--out",
@@ -376,7 +376,7 @@ def main() -> None:
         "--open-timeout",
         type=float,
         default=30.0,
-        help="seconds to wait for blemeesd.opened / blemeesd.closed (default: 30)",
+        help="seconds to wait for agent.opened / agent.closed (default: 30)",
     )
     parser.add_argument(
         "--turn-timeout",

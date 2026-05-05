@@ -16,7 +16,7 @@ labels: enhancement
 
 ## Out of scope
 
-`blemeesd` is pass-through by design — it brokers `claude -p` sessions,
+`blemees-agentd` is pass-through by design — it brokers `claude -p` sessions,
 it does not add tool protocols, system prompts, event filtering, or
 multi-user / system-daemon modes. Requests in those directions will
 likely be closed. See [the spec](../../README.md#2-goals-and-non-goals).

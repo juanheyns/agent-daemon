@@ -1,4 +1,4 @@
-"""JSON Schemas for the `blemees/1` wire protocol.
+"""JSON Schemas for the `blemees-agent/1` wire protocol.
 
 Every frame on the wire has a corresponding Draft 2020-12 schema. This
 subpackage ships with the wheel so clients in any environment can
@@ -6,7 +6,7 @@ validate their implementations without copying the JSON out of the
 source tree.
 
     from blemees_agent.schemas import load
-    hello = load("inbound/blemeesd.hello.json")
+    hello = load("inbound/agent.hello.json")
 
     # Full registry with $ref resolution (needs `jsonschema` + `referencing`):
     from blemees_agent.schemas import iter_schemas
@@ -42,7 +42,7 @@ def files() -> resources.abc.Traversable:
 def load(name: str) -> dict[str, Any]:
     """Load one schema by its package-relative path.
 
-    Example: ``load("inbound/blemeesd.hello.json")``.
+    Example: ``load("inbound/agent.hello.json")``.
     """
     return json.loads((files() / name).read_text(encoding="utf-8"))
 

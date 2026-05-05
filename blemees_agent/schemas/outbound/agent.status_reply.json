@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://blemees/schemas/outbound/blemeesd.status_reply.json",
-  "title": "blemeesd.status_reply",
+  "$id": "https://blemees/schemas/outbound/agent.status_reply.json",
+  "title": "agent.status_reply",
   "description": "Point-in-time snapshot of the daemon's internal state: version info, uptime, connection/session counters, effective config, detected backends.",
   "type": "object",
   "properties": {
-    "type": { "const": "blemeesd.status_reply" },
+    "type": { "const": "agent.status_reply" },
     "id": { "$ref": "https://blemees/schemas/_common.json#/$defs/RequestId" },
     "daemon": { "type": "string" },
     "protocol": { "type": "string" },
@@ -14,7 +14,7 @@
     "socket_path": { "type": "string" },
     "backends": {
       "type": "object",
-      "description": "Map of backend name → version string detected at startup. Same shape as blemeesd.hello_ack.backends.",
+      "description": "Map of backend name → version string detected at startup. Same shape as agent.hello_ack.backends.",
       "additionalProperties": { "type": "string" }
     },
     "connections": { "type": "integer", "minimum": 0 },

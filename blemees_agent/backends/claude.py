@@ -252,7 +252,7 @@ class ClaudeBackend:
         """Terminate an in-flight turn and respawn via ``--resume``.
 
         Returns ``False`` if there was no in-flight turn (caller should emit
-        ``blemeesd.interrupted`` with ``was_idle: true`` and skip the respawn).
+        ``agent.interrupted`` with ``was_idle: true`` and skip the respawn).
 
         Also synthesises a closing ``agent.result{subtype:"interrupted"}`` so
         clients see a consistent turn lifecycle (spec §5.7). The codex
@@ -260,7 +260,7 @@ class ClaudeBackend:
         for claude we have to emit it ourselves since the kill prevents
         the subprocess from producing a native ``result`` event. The
         emit is scheduled as a task so the caller can emit
-        ``blemeesd.interrupted`` first — matching codex, where the
+        ``agent.interrupted`` first — matching codex, where the
         async ``turn_aborted`` event arrives after the ack.
         """
         if not self.turn_active:
@@ -402,7 +402,7 @@ class ClaudeBackend:
                 auth_msg = "Run `claude auth` to re-authenticate."
                 await self._on_event(
                     {
-                        "type": "blemeesd.error",
+                        "type": "agent.error",
                         "session_id": self.session_id,
                         "backend": self.backend,
                         "code": AUTH_FAILED,
@@ -426,7 +426,7 @@ class ClaudeBackend:
             if self._stderr_limit.allow():
                 await self._on_event(
                     {
-                        "type": "blemeesd.stderr",
+                        "type": "agent.stderr",
                         "session_id": self.session_id,
                         "line": line,
                     }
@@ -444,7 +444,7 @@ class ClaudeBackend:
             crash_msg = f"stderr tail: {tail}"[:2048]
             await self._on_event(
                 {
-                    "type": "blemeesd.error",
+                    "type": "agent.error",
                     "session_id": self.session_id,
                     "backend": self.backend,
                     "code": BACKEND_CRASHED,

@@ -186,9 +186,9 @@ async def client_factory(daemon_and_socket):
     async def make() -> _StreamClient:
         reader, writer = await asyncio.open_unix_connection(socket_path)
         c = _StreamClient(reader, writer)
-        await c.send({"type": "blemeesd.hello", "client": "test/0", "protocol": PROTOCOL_VERSION})
+        await c.send({"type": "agent.hello", "client": "test/0", "protocol": PROTOCOL_VERSION})
         ack = await c.recv()
-        assert ack["type"] == "blemeesd.hello_ack", ack
+        assert ack["type"] == "agent.hello_ack", ack
         created.append(c)
         return c
 

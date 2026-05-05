@@ -1,6 +1,6 @@
 # Backend asymmetries the daemon does not paper over
 
-`blemees/2`'s premise is that Claude Code and Codex sessions look the
+`blemees-agent/1`'s premise is that Claude Code and Codex sessions look the
 same on the wire — clients switch on `agent.*` types without branching
 by backend. The daemon goes further than verbatim translation in some
 places: it synthesises closing `agent.result` frames on crashes and

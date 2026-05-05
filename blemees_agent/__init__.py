@@ -12,4 +12,4 @@ except _metadata.PackageNotFoundError:
     # shouldn't crash; emit a sentinel that's obviously not a real release.
     __version__ = "0.0.0+unknown"
 
-PROTOCOL_VERSION = "blemees/2"
+PROTOCOL_VERSION = "blemees-agent/1"

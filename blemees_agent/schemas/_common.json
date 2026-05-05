@@ -28,7 +28,7 @@
     "Backend": {
       "type": "string",
       "enum": ["claude", "codex"],
-      "description": "Backend selector. Set on inbound blemeesd.open and echoed on every outbound agent.* frame so clients can switch by backend if they want to."
+      "description": "Backend selector. Set on inbound agent.open and echoed on every outbound agent.* frame so clients can switch by backend if they want to."
     },
     "MessageContent": {
       "oneOf": [
@@ -73,7 +73,7 @@
     },
     "SessionSummary": {
       "type": "object",
-      "description": "One row in a blemeesd.sessions reply. The shape merges disk-derived fields (`mtime_ms`, `size`, `preview`) with live-only fields (`title`, `model`, `cwd`, `started_at_ms`, `last_active_at_ms`, `owner_pid`, `last_seq`, `turn_active`). Disk-only rows lack the live fields; live-only rows lack the disk fields. Clients should treat every optional field as advisory — absence means \"not known\", never \"zero\".",
+      "description": "One row in a agent.sessions reply. The shape merges disk-derived fields (`mtime_ms`, `size`, `preview`) with live-only fields (`title`, `model`, `cwd`, `started_at_ms`, `last_active_at_ms`, `owner_pid`, `last_seq`, `turn_active`). Disk-only rows lack the live fields; live-only rows lack the disk fields. Clients should treat every optional field as advisory — absence means \"not known\", never \"zero\".",
       "properties": {
         "session_id": { "$ref": "#/$defs/SessionId" },
         "backend": { "$ref": "#/$defs/Backend" },
@@ -121,7 +121,7 @@
         "last_seq": {
           "type": "integer",
           "minimum": 0,
-          "description": "Highest seq the session has produced. Live-only field; matches the `last_seq` carried on `blemeesd.opened` and `blemeesd.watching`."
+          "description": "Highest seq the session has produced. Live-only field; matches the `last_seq` carried on `agent.opened` and `agent.watching`."
         },
         "turn_active": {
           "type": "boolean",
