@@ -442,9 +442,7 @@ def test_parse_list_sessions_empty_body_means_no_filters():
 
 def test_parse_list_sessions_with_cwd_only():
     """The original v0.1 contract: filter by cwd, both live and disk."""
-    msg = parse_list_sessions(
-        {"type": "agent.list_sessions", "id": "r1", "cwd": "/home/u/proj"}
-    )
+    msg = parse_list_sessions({"type": "agent.list_sessions", "id": "r1", "cwd": "/home/u/proj"})
     assert msg.cwd == "/home/u/proj"
     assert msg.id == "r1"
     assert msg.live is None
@@ -465,17 +463,13 @@ def test_parse_list_sessions_live_false_only():
 
 
 def test_parse_list_sessions_cwd_plus_live_true():
-    msg = parse_list_sessions(
-        {"type": "agent.list_sessions", "cwd": "/proj", "live": True}
-    )
+    msg = parse_list_sessions({"type": "agent.list_sessions", "cwd": "/proj", "live": True})
     assert msg.cwd == "/proj"
     assert msg.live is True
 
 
 def test_parse_list_sessions_cwd_plus_live_false():
-    msg = parse_list_sessions(
-        {"type": "agent.list_sessions", "cwd": "/proj", "live": False}
-    )
+    msg = parse_list_sessions({"type": "agent.list_sessions", "cwd": "/proj", "live": False})
     assert msg.cwd == "/proj"
     assert msg.live is False
 

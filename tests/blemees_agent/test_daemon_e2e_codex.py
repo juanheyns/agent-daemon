@@ -207,9 +207,7 @@ async def test_real_codex_session_info_in_memory_no_turns(real_daemon):
         await c.send(_open_codex(session))
         await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
-        info = await c.wait_for(
-            lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0
-        )
+        info = await c.wait_for(lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0)
         assert info["backend"] == "codex"
         assert info["session_id"] == session
         assert info["turns"] == 0
@@ -234,9 +232,7 @@ async def test_real_codex_session_info_in_memory_after_turn(real_daemon):
         await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(c, session)
         await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
-        info = await c.wait_for(
-            lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0
-        )
+        info = await c.wait_for(lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0)
         assert info["turns"] == 1
         assert info["attached"] is True
         cu = info["cumulative_usage"]
@@ -335,9 +331,7 @@ async def test_real_codex_native_session_id_is_threadid(real_daemon):
         await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(c, session)
         await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
-        info = await c.wait_for(
-            lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0
-        )
+        info = await c.wait_for(lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0)
         thread_id = info.get("native_session_id")
         assert isinstance(thread_id, str) and thread_id
         # Codex threadIds are UUIDish; just verify it differs from the
@@ -572,9 +566,7 @@ async def test_real_codex_open_same_session_id_twice(real_daemon):
             }
         )
         evt = await c.wait_for(
-            lambda e: (
-                e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r2"
-            ),
+            lambda e: e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r2",
             timeout=10.0,
         )
         assert evt["type"] == "agent.error"
@@ -747,9 +739,7 @@ async def test_real_codex_open_with_empty_options(real_daemon):
             }
         )
         evt = await c.wait_for(
-            lambda e: (
-                e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r1"
-            ),
+            lambda e: e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r1",
             timeout=30.0,
         )
         assert evt["type"] == "agent.opened" or evt["code"] != "invalid_message", evt
@@ -857,9 +847,7 @@ async def test_real_codex_three_turns_accumulate_usage(real_daemon):
         for _ in range(3):
             await _say_ok(c, session)
         await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
-        info = await c.wait_for(
-            lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0
-        )
+        info = await c.wait_for(lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0)
         assert info["turns"] == 3
         cu = info["cumulative_usage"]
         assert cu.get("input_tokens", 0) >= 3
@@ -876,9 +864,7 @@ async def test_real_codex_two_concurrent_sessions_independent(real_daemon):
         for sid in (s1, s2):
             await c.send(_open_codex(sid))
             await c.wait_for(
-                lambda e, sid=sid: (
-                    e.get("type") == "agent.opened" and e.get("session_id") == sid
-                ),
+                lambda e, sid=sid: e.get("type") == "agent.opened" and e.get("session_id") == sid,
                 timeout=30.0,
             )
         for sid in (s1, s2):
@@ -1675,9 +1661,7 @@ async def test_real_codex_three_connections_three_sessions(real_daemon):
         for c, sid in zip(clients, sessions, strict=True):
             await c.send(_open_codex(sid))
             await c.wait_for(
-                lambda e, sid=sid: (
-                    e.get("type") == "agent.opened" and e.get("session_id") == sid
-                ),
+                lambda e, sid=sid: e.get("type") == "agent.opened" and e.get("session_id") == sid,
                 timeout=30.0,
             )
         for c, sid in zip(clients, sessions, strict=True):

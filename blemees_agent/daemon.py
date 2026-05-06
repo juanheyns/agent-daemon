@@ -585,9 +585,7 @@ class Connection:
                 # For codex, on-disk row is keyed by threadId; in-memory by
                 # the daemon's session_id (== threadId only after resume from
                 # a prior list_sessions row). Match on whichever id we know.
-                candidate_keys: list[tuple[str, str]] = [
-                    (sess.backend_name, sess.session_id)
-                ]
+                candidate_keys: list[tuple[str, str]] = [(sess.backend_name, sess.session_id)]
                 if sess.backend_name == "codex" and sess.native_session_id:
                     candidate_keys.append(("codex", sess.native_session_id))
                 existing_key: tuple[str, str] | None = None
@@ -677,9 +675,7 @@ class Connection:
                 }
             )
         await self._sessions.remove(msg.session_id, delete_file=msg.delete)
-        await self._emit_frame(
-            {"type": "agent.closed", "id": msg.id, "session_id": msg.session_id}
-        )
+        await self._emit_frame({"type": "agent.closed", "id": msg.id, "session_id": msg.session_id})
 
     async def _handle_ping(self, msg: PingMessage) -> None:
         """Liveness check: reply with ``agent.pong`` carrying the client's id.

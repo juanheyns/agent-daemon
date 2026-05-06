@@ -183,9 +183,7 @@ async def test_real_claude_session_info_in_memory_no_turns(real_daemon):
         await c.send(_open_claude(session))
         await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
-        info = await c.wait_for(
-            lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0
-        )
+        info = await c.wait_for(lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0)
         assert info["backend"] == "claude"
         assert info["session_id"] == session
         assert info["native_session_id"] == session
@@ -211,9 +209,7 @@ async def test_real_claude_session_info_in_memory_after_turn(real_daemon):
         await c.wait_for(lambda e: e.get("type") == "agent.opened", timeout=30.0)
         await _say_ok(c, session)
         await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
-        info = await c.wait_for(
-            lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0
-        )
+        info = await c.wait_for(lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0)
         assert info["turns"] == 1
         assert info["attached"] is True
         assert info["subprocess_running"] is True
@@ -494,9 +490,7 @@ async def test_real_claude_open_same_session_id_twice(real_daemon):
             }
         )
         evt = await c.wait_for(
-            lambda e: (
-                e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r2"
-            ),
+            lambda e: e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r2",
             timeout=10.0,
         )
         assert evt["type"] == "agent.error"
@@ -719,9 +713,7 @@ async def test_real_claude_open_with_empty_options(real_daemon):
         # if the local CC config can't honour pure defaults — but the
         # frame must be accepted by the daemon (no invalid_message).
         evt = await c.wait_for(
-            lambda e: (
-                e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r1"
-            ),
+            lambda e: e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r1",
             timeout=30.0,
         )
         assert evt["type"] == "agent.opened" or evt["code"] != "invalid_message", evt
@@ -879,9 +871,7 @@ async def test_real_claude_three_turns_accumulate_usage(real_daemon):
         for _ in range(3):
             await _say_ok(c, session)
         await c.send({"type": "agent.session_info", "id": "i1", "session_id": session})
-        info = await c.wait_for(
-            lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0
-        )
+        info = await c.wait_for(lambda e: e.get("type") == "agent.session_info_reply", timeout=10.0)
         assert info["turns"] == 3
         cu = info["cumulative_usage"]
         # Three minimal turns easily clear single-digit input/output token totals.
@@ -904,9 +894,7 @@ async def test_real_claude_two_concurrent_sessions_independent(real_daemon):
                 # the predicate would close over the loop variable and
                 # match against whatever ``sid`` ended up as after the
                 # loop finished.
-                lambda e, sid=sid: (
-                    e.get("type") == "agent.opened" and e.get("session_id") == sid
-                ),
+                lambda e, sid=sid: e.get("type") == "agent.opened" and e.get("session_id") == sid,
                 timeout=30.0,
             )
         await c.send(
@@ -1584,9 +1572,7 @@ async def test_real_claude_open_with_invalid_session_id_format(real_daemon):
             }
         )
         evt = await c.wait_for(
-            lambda e: (
-                e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r1"
-            ),
+            lambda e: e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r1",
             timeout=30.0,
         )
         if evt["type"] == "agent.error":
@@ -1731,9 +1717,7 @@ async def test_real_claude_open_extra_backend_block_ignored(real_daemon):
             }
         )
         evt = await c.wait_for(
-            lambda e: (
-                e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r1"
-            ),
+            lambda e: e.get("type") in {"agent.opened", "agent.error"} and e.get("id") == "r1",
             timeout=30.0,
         )
         # Either silently ignored (opened) OR flagged (error). Both are
@@ -2076,9 +2060,7 @@ async def test_real_claude_three_connections_three_sessions(real_daemon):
         for c, sid in zip(clients, sessions, strict=True):
             await c.send(_open_claude(sid))
             await c.wait_for(
-                lambda e, sid=sid: (
-                    e.get("type") == "agent.opened" and e.get("session_id") == sid
-                ),
+                lambda e, sid=sid: e.get("type") == "agent.opened" and e.get("session_id") == sid,
                 timeout=30.0,
             )
         # Each runs a turn.

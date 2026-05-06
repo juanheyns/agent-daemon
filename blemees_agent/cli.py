@@ -257,9 +257,7 @@ class Harness:
         await self._send({"type": "agent.list_sessions", "id": _req_id(), "cwd": cwd})
 
     async def session_info(self, session_id: str) -> None:
-        await self._send(
-            {"type": "agent.session_info", "id": _req_id(), "session_id": session_id}
-        )
+        await self._send({"type": "agent.session_info", "id": _req_id(), "session_id": session_id})
 
     async def open(self, session_id: str, fields: dict[str, Any]) -> str:
         if session_id == "new":

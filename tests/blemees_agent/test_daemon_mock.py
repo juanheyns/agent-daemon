@@ -377,9 +377,7 @@ async def test_close_removes_session(client_factory, fake_mode):
         }
     )
     await client.wait_for(lambda e: e.get("type") == "agent.opened")
-    await client.send(
-        {"type": "agent.close", "id": "r2", "session_id": "s-close", "delete": False}
-    )
+    await client.send({"type": "agent.close", "id": "r2", "session_id": "s-close", "delete": False})
     closed = await client.wait_for(lambda e: e.get("type") == "agent.closed")
     assert closed["session_id"] == "s-close"
 
@@ -522,9 +520,7 @@ async def test_list_sessions_empty_body_unions_disk_and_live(
     assert rows["warm"]["cwd"] == cwd_a
 
 
-async def test_list_sessions_live_true_returns_all_live(
-    client_factory, fake_mode, tmp_path
-):
+async def test_list_sessions_live_true_returns_all_live(client_factory, fake_mode, tmp_path):
     """`live:true` skips the disk scan; live overlay across all cwds."""
     fake_mode("normal")
     cwd_a = tmp_path / "a"
@@ -590,9 +586,7 @@ async def test_list_sessions_live_false_excludes_currently_live(
     )
     await client.wait_for(lambda e: e.get("type") == "agent.opened")
 
-    await client.send(
-        {"type": "agent.list_sessions", "id": "r1", "cwd": cwd, "live": False}
-    )
+    await client.send({"type": "agent.list_sessions", "id": "r1", "cwd": cwd, "live": False})
     reply = await client.wait_for(lambda e: e.get("type") == "agent.sessions")
     ids = {s["session_id"] for s in reply["sessions"]}
     assert "old-cold" in ids
@@ -623,9 +617,7 @@ async def test_list_sessions_cwd_plus_live_true_skips_disk(
     )
     await client.wait_for(lambda e: e.get("type") == "agent.opened")
 
-    await client.send(
-        {"type": "agent.list_sessions", "id": "r1", "cwd": cwd, "live": True}
-    )
+    await client.send({"type": "agent.list_sessions", "id": "r1", "cwd": cwd, "live": True})
     reply = await client.wait_for(lambda e: e.get("type") == "agent.sessions")
     ids = {s["session_id"] for s in reply["sessions"]}
     assert "warm" in ids
@@ -1181,9 +1173,7 @@ async def test_watch_unknown_session_errors(client_factory):
     assert err["code"] == "session_unknown"
 
 
-async def test_watcher_receives_session_closed_when_owner_closes(
-    client_factory, fake_mode
-):
+async def test_watcher_receives_session_closed_when_owner_closes(client_factory, fake_mode):
     """When the owner sends `agent.close`, every watcher gets a
     `agent.session_closed{reason:"owner_closed"}` notification before
     the session is removed."""
@@ -1203,15 +1193,11 @@ async def test_watcher_receives_session_closed_when_owner_closes(
     await watcher.send({"type": "agent.watch", "id": "w1", "session_id": "closer"})
     await watcher.wait_for(lambda e: e.get("type") == "agent.watching")
 
-    await owner.send(
-        {"type": "agent.close", "id": "c1", "session_id": "closer", "delete": False}
-    )
+    await owner.send({"type": "agent.close", "id": "c1", "session_id": "closer", "delete": False})
     closed_ack = await owner.wait_for(lambda e: e.get("type") == "agent.closed")
     assert closed_ack["session_id"] == "closer"
 
-    notice = await watcher.wait_for(
-        lambda e: e.get("type") == "agent.session_closed"
-    )
+    notice = await watcher.wait_for(lambda e: e.get("type") == "agent.session_closed")
     assert notice["session_id"] == "closer"
     assert notice["reason"] == "owner_closed"
 
@@ -1231,9 +1217,7 @@ async def test_session_closed_not_sent_to_owner(client_factory, fake_mode):
         }
     )
     await client.wait_for(lambda e: e.get("type") == "agent.opened")
-    await client.send(
-        {"type": "agent.close", "id": "c1", "session_id": "solo", "delete": False}
-    )
+    await client.send({"type": "agent.close", "id": "c1", "session_id": "solo", "delete": False})
     await client.wait_for(lambda e: e.get("type") == "agent.closed")
 
     # Drain anything else; assert no session_closed leaked back to the owner.
